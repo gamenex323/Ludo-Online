@@ -16,15 +16,17 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using AssemblyCSharp;
+using ExitGames.Client.Photon;
 using Facebook.Unity;
-using Photon;
+using Photon.Pun;
+using Photon.Realtime;
 using PlayFab;
 using PlayFab.ClientModels;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-public class GameGUIController : PunBehaviour
+public class GameGUIController : MonoBehaviourPunCallbacks, IOnEventCallback
 {
 
     public GameObject TIPButtonObject;
@@ -121,7 +123,9 @@ public class GameGUIController : PunBehaviour
             requiredToStart = 2;
         }
 
-        PhotonNetwork.RaiseEvent((int)EnumPhoton.ReadyToPlay, 0, true, null);
+        PhotonNetwork.RaiseEvent((int)EnumPhoton.ReadyToPlay, null,                               // No content
+                new RaiseEventOptions { Receivers = ReceiverGroup.All }, // Send to all players
+                SendOptions.SendReliable);
 
         // LUDO
         // Rotate board and set colors
@@ -512,9 +516,9 @@ public class GameGUIController : PunBehaviour
             bool contains = false;
             if (!playerObjects[i].id.Contains("_BOT"))
             {
-                for (int j = 0; j < PhotonNetwork.playerList.Length; j++)
+                for (int j = 0; j < PhotonNetwork.PlayerList.Length; j++)
                 {
-                    if (PhotonNetwork.playerList[j].NickName.Equals(playerObjects[i].id))
+                    if (PhotonNetwork.PlayerList[j].NickName.Equals(playerObjects[i].id))
                     {
                         contains = true;
                         break;
@@ -624,7 +628,7 @@ public class GameGUIController : PunBehaviour
     public void StopAndFinishGame()
     {
         StopTimers();
-        SetFinishGame(PhotonNetwork.player.NickName, true);
+        SetFinishGame(PhotonNetwork.LocalPlayer.NickName, true);
         ShowGameFinishWindow();
     }
 
@@ -649,7 +653,7 @@ public class GameGUIController : PunBehaviour
         if (!FinishWindowActive)
         {
 
-            AdsManager.Instance.adsScript.ShowAd(AdLocation.GameFinishWindow);
+            //AdsManager.Instance.adsScript.ShowAd(AdLocation.GameFinishWindow);
             FinishWindowActive = true;
 
             List<PlayerObject> otherPlayers = new List<PlayerObject>();
@@ -701,7 +705,18 @@ public class GameGUIController : PunBehaviour
 
             PlayFabClientAPI.AddFriend(request, (result) =>
             {
-                PhotonNetwork.RaiseEvent((int)EnumPhoton.AddFriend, PhotonNetwork.playerName + ";" + GameManager.Instance.nameMy + ";" + CurrentPlayerID, true, null);
+                // Create RaiseEventOptions
+                RaiseEventOptions options = new RaiseEventOptions()
+                {
+                    // You can specify who should receive the event. For example, true means broadcast to all players.
+                    Receivers = ReceiverGroup.All,
+                    // Optionally, you can set this to true if the event should be sent reliably.
+                    CachingOption = EventCaching.AddToRoomCache,
+                };
+
+                // Raise the event with the correct options
+                PhotonNetwork.RaiseEvent((int)EnumPhoton.AddFriend, PhotonNetwork.LocalPlayer.NickName + ";" + GameManager.Instance.nameMy + ";" + CurrentPlayerID, options, SendOptions.SendReliable);
+
                 addedFriendWindow.SetActive(true);
                 Debug.Log("Added friend successfully");
             }, (error) =>
@@ -725,7 +740,7 @@ public class GameGUIController : PunBehaviour
 
     public void FinishedGame()
     {
-        if (GameManager.Instance.currentPlayer.id == PhotonNetwork.player.NickName)
+        if (GameManager.Instance.currentPlayer.id == PhotonNetwork.LocalPlayer.NickName)
         {
             SetFinishGame(GameManager.Instance.currentPlayer.id, true);
         }
@@ -766,19 +781,34 @@ public class GameGUIController : PunBehaviour
 
             if (me)
             {
-                PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong;
+                ////sajidPhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong;
                 iFinished = true;
                 if (ActivePlayersInRoom >= 0)
                 {
-                    PhotonNetwork.RaiseEvent((int)EnumPhoton.FinishedGame, PhotonNetwork.player.NickName, true, null);
+                    // Create RaiseEventOptions
+                    RaiseEventOptions options = new RaiseEventOptions()
+                    {
+                        // You can specify who should receive the event. 
+                        // 'ReceiverGroup.All' sends the event to all players in the room.
+                        Receivers = ReceiverGroup.All,
+
+                        // Optionally, you can set this to true if the event should be sent reliably.
+                        CachingOption = EventCaching.AddToRoomCache,
+                    };
+
+                    // Raise the event with the correct options
+                    PhotonNetwork.RaiseEvent((int)EnumPhoton.FinishedGame, PhotonNetwork.LocalPlayer.NickName, options, SendOptions.SendReliable);
+
                     Debug.Log("set finish call finish turn");
+
+                    // Call your finish turn logic
                     SendFinishTurn();
                 }
 
 
 
 
-                if (position == 1)
+                    if (position == 1)
                 {
                     WinSound.Play();
                     Dictionary<string, string> data = new Dictionary<string, string>();
@@ -838,7 +868,18 @@ public class GameGUIController : PunBehaviour
             }
             else
             {
-                PhotonNetwork.RaiseEvent((int)EnumPhoton.NextPlayerTurn, myIndex, true, null);
+                // Create RaiseEventOptions
+                RaiseEventOptions options = new RaiseEventOptions()
+                {
+                    // You can specify the receivers here, e.g., 'ReceiverGroup.All' to send the event to all players.
+                    Receivers = ReceiverGroup.All,
+
+                    // Optionally, set this to true if the event should be cached.
+                    CachingOption = EventCaching.AddToRoomCache
+                };
+
+                // Raise the event with the correct options
+                PhotonNetwork.RaiseEvent((int)EnumPhoton.NextPlayerTurn, myIndex, options, SendOptions.SendReliable);
 
                 //currentPlayerIndex = (myIndex + 1) % playerObjects.Count;
 
@@ -862,15 +903,87 @@ public class GameGUIController : PunBehaviour
     /// </summary>
     void Awake()
     {
-        PhotonNetwork.OnEventCall += this.OnEvent;
+        PhotonNetwork.NetworkingClient.EventReceived += OnEvent;
     }
 
 
     void OnDestroy()
     {
-        PhotonNetwork.OnEventCall -= this.OnEvent;
+        PhotonNetwork.NetworkingClient.EventReceived -= OnEvent;
     }
+    public void OnEvent(EventData photonEvent)
+    {
+        Debug.Log("received event: " + photonEvent.Code);
+        if (photonEvent.Code == (int)EnumPhoton.NextPlayerTurn)
+        {
+            if (playerObjects[(int)photonEvent.CustomData].AvatarObject.GetComponent<PlayerAvatarController>().Active &&
+                currentPlayerIndex == (int)photonEvent.CustomData)
+            {
+                if (!FinishWindowActive)
+                {
+                    setCurrentPlayerIndex((int)photonEvent.CustomData);
 
+                    SetTurn();
+                }
+            }
+        }
+        else if (photonEvent.Code == (int)EnumPhoton.SendChatMessage)
+        {
+            string[] message = ((string)photonEvent.CustomData).Split(';');
+            Debug.Log("Received message " + message[0] + " from " + message[1]);
+            for (int i = 0; i < playerObjects.Count; i++)
+            {
+                if (playerObjects[i].id.Equals(message[1]))
+                {
+                    playerObjects[i].ChatBubbleText.SetActive(true);
+                    playerObjects[i].ChatbubbleImage.SetActive(false);
+                    playerObjects[i].ChatBubbleText.GetComponent<Text>().text = message[0];
+                    playerObjects[i].ChatBubble.GetComponent<Animator>().Play("MessageBubbleAnimation");
+                }
+            }
+        }
+        else if (photonEvent.Code == (int)EnumPhoton.SendChatEmojiMessage)
+        {
+            string[] message = ((string)photonEvent.CustomData).Split(';');
+            Debug.Log("Received message " + message[0] + " from " + message[1]);
+            for (int i = 0; i < playerObjects.Count; i++)
+            {
+                if (playerObjects[i].id.Equals(message[1]))
+                {
+                    playerObjects[i].ChatBubbleText.SetActive(false);
+                    playerObjects[i].ChatbubbleImage.SetActive(true);
+                    int index = int.Parse(message[0]);
+
+                    if (index > emojiSprites.Length - 1)
+                    {
+                        index = emojiSprites.Length;
+                    }
+                    playerObjects[i].ChatbubbleImage.GetComponent<Image>().sprite = emojiSprites[index];
+                    playerObjects[i].ChatBubble.GetComponent<Animator>().Play("MessageBubbleAnimation");
+                }
+            }
+        }
+        else if (photonEvent.Code == (int)EnumPhoton.AddFriend)
+        {
+            if (PlayerPrefs.GetInt(StaticStrings.FriendsRequestesKey, 0) == 0)
+            {
+                string[] data = ((string)photonEvent.CustomData).Split(';');
+                if (PhotonNetwork.LocalPlayer.NickName.Equals(data[2]))
+                    invitiationDialog.GetComponent<PhotonChatListener2>().showInvitationDialog(data[0], data[1], null);
+            }
+            else
+            {
+                Debug.Log("Invitations OFF");
+            }
+
+        }
+        else if (photonEvent.Code == (int)EnumPhoton.FinishedGame)
+        {
+            string message = (string)photonEvent.CustomData;
+            SetFinishGame(message, false);
+
+        }
+    }
     private void OnEvent(byte eventcode, object content, int senderid)
     {
         Debug.Log("received event: " + eventcode);
@@ -928,7 +1041,7 @@ public class GameGUIController : PunBehaviour
             if (PlayerPrefs.GetInt(StaticStrings.FriendsRequestesKey, 0) == 0)
             {
                 string[] data = ((string)content).Split(';');
-                if (PhotonNetwork.playerName.Equals(data[2]))
+                if (PhotonNetwork.LocalPlayer.NickName.Equals(data[2]))
                     invitiationDialog.GetComponent<PhotonChatListener2>().showInvitationDialog(data[0], data[1], null);
             }
             else
@@ -1068,7 +1181,7 @@ public class GameGUIController : PunBehaviour
         playerObjects[currentPlayerIndex].timer.GetComponent<UpdatePlayerTimer>().restartTimer();
     }
 
-    public override void OnPhotonPlayerDisconnected(PhotonPlayer otherPlayer)
+    public override void OnPlayerLeftRoom(Player otherPlayer)
     {
         Debug.Log("Player disconnected: " + otherPlayer.NickName);
 
@@ -1199,7 +1312,7 @@ public class GameGUIController : PunBehaviour
         {
             PlayerPrefs.SetInt("GamesPlayed", PlayerPrefs.GetInt("GamesPlayed", 1) + 1);
             SceneManager.LoadScene("MenuScene");
-            PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong;
+            ////sajidPhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong;
 
             //GameManager.Instance.cueController.removeOnEventCall();
             PhotonNetwork.LeaveRoom();
@@ -1229,5 +1342,5 @@ public class GameGUIController : PunBehaviour
         }
     }
 
-
+    
 }

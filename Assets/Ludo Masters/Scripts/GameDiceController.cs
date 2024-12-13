@@ -15,6 +15,9 @@ U should buy the asset from home store if u use it in your project!
 using System.Collections;
 using System.Collections.Generic;
 using AssemblyCSharp;
+using ExitGames.Client.Photon;
+using Photon.Pun;
+using Photon.Realtime;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -128,7 +131,13 @@ public class GameDiceController : MonoBehaviour
 
             RollDiceStart(steps);
             string data = steps + ";" + controller.gUIController.GetCurrentPlayerIndex();
-            PhotonNetwork.RaiseEvent((int)EnumGame.DiceRoll, data, true, null);
+            RaiseEventOptions options = new RaiseEventOptions
+            {
+                Receivers = ReceiverGroup.All
+            };
+
+            PhotonNetwork.RaiseEvent((byte)EnumGame.DiceRoll, data, options, SendOptions.SendReliable);
+
 
             Debug.Log("Value: " + steps);
         }

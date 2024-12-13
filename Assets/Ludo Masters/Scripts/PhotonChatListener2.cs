@@ -14,7 +14,6 @@ U should buy the asset from home store if u use it in your project!
 
 using UnityEngine;
 using System.Collections;
-using ExitGames.Client.Photon.Chat;
 using ExitGames.Client.Photon;
 using UnityEngine.UI;
 using PlayFab.ClientModels;

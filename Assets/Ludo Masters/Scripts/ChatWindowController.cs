@@ -15,6 +15,9 @@ U should buy the asset from home store if u use it in your project!
 using System.Collections;
 using System.Collections.Generic;
 using AssemblyCSharp;
+using ExitGames.Client.Photon;
+using Photon.Pun;
+using Photon.Realtime;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -98,8 +101,14 @@ public class ChatWindowController : MonoBehaviour
     {
         Debug.Log("Button Clicked " + index);
         if (!GameManager.Instance.offlineMode)
-            PhotonNetwork.RaiseEvent((int)EnumPhoton.SendChatMessage, index + ";" + PhotonNetwork.playerName, true, null);
-
+        {
+            PhotonNetwork.RaiseEvent(
+                (int)EnumPhoton.SendChatMessage,
+                index + ";" + PhotonNetwork.LocalPlayer.NickName,
+                new RaiseEventOptions { Receivers = ReceiverGroup.All },
+                SendOptions.SendReliable
+            );
+        }
         chatWindow.SetActive(false);
 
         ChatButton.GetComponent<Text>().text = "CHAT";
@@ -130,8 +139,14 @@ public class ChatWindowController : MonoBehaviour
         Debug.Log("Button Clicked " + index);
 
         if (!GameManager.Instance.offlineMode)
-            PhotonNetwork.RaiseEvent((int)EnumPhoton.SendChatEmojiMessage, index + ";" + PhotonNetwork.playerName, true, null);
-
+        {
+            PhotonNetwork.RaiseEvent(
+                (int)EnumPhoton.SendChatEmojiMessage,
+                index + ";" + PhotonNetwork.LocalPlayer.NickName,
+                new RaiseEventOptions { Receivers = ReceiverGroup.All },
+                SendOptions.SendReliable
+            );
+        }
         chatWindow.SetActive(false);
 
         ChatButton.GetComponent<Text>().text = "CHAT";

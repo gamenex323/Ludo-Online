@@ -244,7 +244,7 @@ public class AdsController : MonoBehaviour
             this.interstitialAd.InterstitialAdDidLoad = (delegate ()
             {
                 Debug.Log("Fb Interstitial ad loaded.");
-                AdsManager.Instance.adsScript.loadedAdmob = true;
+                //AdsManager.Instance.adsScript.loadedAdmob = true;
                 this.isLoaded = true;
             });
             interstitialAd.InterstitialAdDidFailWithError = (delegate (string error)
@@ -322,7 +322,7 @@ public class AdsController : MonoBehaviour
         void didCloseInterstitial(CBLocation location)
         {
             Debug.Log("didCloseInterstitial: " + location);
-            AdsManager.Instance.adsScript.loadedAdmob = true;
+            //AdsManager.Instance.adsScript.loadedAdmob = true;
             currentAdIndex = (currentAdIndex + 1) % activeNetworks;
         }
 
@@ -395,7 +395,7 @@ public class AdsController : MonoBehaviour
         private void HandleOnAdLoaded(object sender, EventArgs args)
         {
             Debug.Log("Admob ad loaded");
-            AdsManager.Instance.adsScript.loadedAdmob = true;
+            //AdsManager.Instance.adsScript.loadedAdmob = true;
         }
 
         private void HandleOnAdFailedToLoad(object sender, GoogleMobileAds.Api.AdFailedToLoadEventArgs args)

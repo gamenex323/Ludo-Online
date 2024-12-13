@@ -12,6 +12,9 @@ daily assets update for try.
 U should buy the asset from home store if u use it in your project!
 */
 
+using ExitGames.Client.Photon;
+using Photon.Pun;
+using Photon.Realtime;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -26,7 +29,16 @@ public class GameInitScript : MonoBehaviour
 
         if (GameManager.Instance.roomOwner)
         {
-            PhotonNetwork.RaiseEvent(198, null, true, null);
+            RaiseEventOptions options = new RaiseEventOptions
+            {
+                Receivers = ReceiverGroup.All // Send the event to all players in the room
+            };
+            SendOptions sendOptions = new SendOptions
+            {
+                Reliability = true // Ensure reliable transmission
+            };
+
+            PhotonNetwork.RaiseEvent(198, null, options, sendOptions);
         }
         else
         {

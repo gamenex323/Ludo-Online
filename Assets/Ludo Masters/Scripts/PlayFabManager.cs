@@ -20,15 +20,16 @@ using System;
 using UnityEngine.SceneManagement;
 using Facebook.Unity;
 using System.Collections.Generic;
-using ExitGames.Client.Photon.Chat;
 using ExitGames.Client.Photon;
 using UnityEngine.UI;
 using System.Text.RegularExpressions;
 using AssemblyCSharp;
 using System.Globalization;
+using Photon.Pun;
+using Photon.Chat;
+using Photon.Realtime;
 
-
-public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
+public class PlayFabManager : MonoBehaviourPunCallbacks, IChatClientListener
 {
 
     private Sprite[] avatarSprites;
@@ -73,27 +74,52 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
     void Awake()
     {
         Debug.Log("Playfab awake");
-        //PlayerPrefs.DeleteAll();
-        PhotonNetwork.PhotonServerSettings.HostType = ServerSettings.HostingOption.PhotonCloud;
-        PhotonNetwork.PhotonServerSettings.PreferredRegion = CloudRegionCode.eu;
-        // PhotonNetwork.PhotonServerSettings.HostType = ServerSettings.HostingOption.BestRegion;
-        // PhotonNetwork.PhotonServerSettings.AppID = StaticStrings.PhotonAppID;
-#if UNITY_IOS
-        PhotonNetwork.PhotonServerSettings.Protocol = ConnectionProtocol.Tcp;
-#else
-        PhotonNetwork.PhotonServerSettings.Protocol = ConnectionProtocol.Udp;
-#endif
-        Debug.Log("PORT: " + PhotonNetwork.PhotonServerSettings.ServerPort);
+        // PlayerPrefs.DeleteAll();
 
+        // Configure Photon Server Settings
+        PhotonNetwork.PhotonServerSettings.AppSettings.FixedRegion = "eu"; // Replace with desired region
+        PhotonNetwork.PhotonServerSettings.AppSettings.Protocol = ConnectionProtocol.Udp;
+
+        // Set PlayFab Title ID
         PlayFabSettings.TitleId = StaticStrings.PlayFabTitleID;
 
-        PhotonNetwork.OnEventCall += this.OnEvent;
-        DontDestroyOnLoad(transform.gameObject);
-    }
+        // Subscribe to Photon Event System
+        PhotonNetwork.NetworkingClient.EventReceived += this.OnEvent;
 
+        // Ensure this GameObject persists across scenes
+        DontDestroyOnLoad(transform.gameObject);
+
+    }
+    private void OnEvent(EventData photonEvent)
+    {
+        // Handle the Photon event here
+        Debug.Log("Photon event received: " + photonEvent.Code);
+        Debug.Log("Received event: " + (int)photonEvent.Code + " Sender ID: " + photonEvent.Sender);
+
+        if (photonEvent.Code == (int)EnumPhoton.BeginPrivateGame)
+        {
+            //StartGame();
+            LoadGameScene();
+        }
+        else if (photonEvent.Code == (int)EnumPhoton.StartWithBots && photonEvent.Sender != PhotonNetwork.LocalPlayer.ActorNumber)
+        {
+            LoadBots();
+        }
+        else if (photonEvent.Code == (int)EnumPhoton.StartGame)
+        {
+            //Invoke("LoadGameWithDelay", UnityEngine.Random.Range(1.0f, 5.0f));
+            //PhotonNetwork.LeaveRoom();
+            LoadGameScene();
+        }
+        else if (photonEvent.Code == (int)EnumPhoton.ReadyToPlay)
+        {
+            GameManager.Instance.readyPlayersCount++;
+            //LoadGameScene();
+        }
+    }
     void OnDestroy()
     {
-        PhotonNetwork.OnEventCall -= this.OnEvent;
+        PhotonNetwork.NetworkingClient.EventReceived -= this.OnEvent;
     }
 
     public void destroy()
@@ -105,13 +131,55 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
     // Use this for initialization
     void Start()
     {
-        Debug.Log("Playfab start");
-        PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
-        GameManager.Instance.playfabManager = this;
-        fbManager = GameObject.Find("FacebookManager").GetComponent<FacebookManager>();
-        facebookFriendsMenu = GameManager.Instance.facebookFriendsMenu;
+        if (string.IsNullOrEmpty(PlayFabSettings.TitleId))
+        {
+            Debug.LogError("PlayFab TitleId is not set!");
+            return;
+        }
 
-        avatarSprites = GameObject.Find("StaticGameVariablesContainer").GetComponent<StaticGameVariablesController>().avatars;
+        Debug.Log("Using PlayFab Title ID: " + PlayFabSettings.TitleId);
+        // Proceed with the login after TitleId is set
+        //Debug.Log("Playfab start");
+        //PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
+        //GameManager.Instance.playfabManager = this;
+        //fbManager = GameObject.Find("FacebookManager").GetComponent<FacebookManager>();
+        //facebookFriendsMenu = GameManager.Instance.facebookFriendsMenu;
+
+        //avatarSprites = GameObject.Find("StaticGameVariablesContainer").GetComponent<StaticGameVariablesController>().avatars;
+
+        Debug.Log("Playfab start");
+
+        // Set Photon timeout in the background
+        PhotonNetwork.KeepAliveInBackground = StaticStrings.photonDisconnectTimeoutLong;
+
+        // Assign PlayFab manager instance
+        GameManager.Instance.playfabManager = this;
+
+        // Find FacebookManager
+        fbManager = FindObjectOfType<FacebookManager>();
+        if (fbManager == null)
+        {
+            Debug.LogError("FacebookManager not found in the scene!");
+        }
+
+        // Find Facebook Friends Menu
+        facebookFriendsMenu = GameManager.Instance.facebookFriendsMenu;
+        if (facebookFriendsMenu == null)
+        {
+            Debug.LogError("FacebookFriendsMenu is null in GameManager!");
+        }
+
+        // Load avatar sprites
+        var staticGameVariables = FindObjectOfType<StaticGameVariablesController>();
+        if (staticGameVariables != null)
+        {
+            avatarSprites = staticGameVariables.avatars;
+        }
+        else
+        {
+            Debug.LogError("StaticGameVariablesController not found in the scene!");
+        }
+
     }
 
     void Update()
@@ -132,7 +200,7 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
             //StartGame();
             LoadGameScene();
         }
-        else if (eventcode == (int)EnumPhoton.StartWithBots && senderid != PhotonNetwork.player.ID)
+        else if (eventcode == (int)EnumPhoton.StartWithBots && senderid != PhotonNetwork.LocalPlayer.ActorNumber)
         {
             LoadBots();
         }
@@ -147,7 +215,6 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
             GameManager.Instance.readyPlayersCount++;
             //LoadGameScene();
         }
-
     }
 
     public void LoadGameWithDelay()
@@ -155,7 +222,7 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
         LoadGameScene();
     }
 
-    public override void OnMasterClientSwitched(PhotonPlayer newMasterClient)
+    public override void OnMasterClientSwitched(Player newMasterClient)
     {
         if (GameManager.Instance.controlAvatars != null && GameManager.Instance.type == MyGameType.Private)
         {
@@ -164,25 +231,42 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
         }
         else
         {
-            if (newMasterClient.NickName == PhotonNetwork.player.NickName)
+            if (newMasterClient.NickName == PhotonNetwork.LocalPlayer.NickName)
             {
-                Debug.Log("Im new master client");
+                Debug.Log("I'm the new master client");
                 WaitForNewPlayer();
             }
         }
-
     }
 
+//public override void OnMasterClientSwitched(Player newMasterClient)
+//{
+//    if (GameManager.Instance.controlAvatars != null && GameManager.Instance.type == MyGameType.Private)
+//    {
+//        PhotonNetwork.LeaveRoom();
+//        GameManager.Instance.controlAvatars.ShowJoinFailed("Room closed");
+//    }
+//    else
+//    {
+//        if (newMasterClient.NickName == PhotonNetwork.player.NickName)
+//        {
+//            Debug.Log("Im new master client");
+//            WaitForNewPlayer();
+//        }
+//    }
+
+//}
 
 
-    public void StartGame()
+
+public void StartGame()
     {
         // while (!opponentReady || !imReady /*|| (!GameManager.Instance.roomOwner && !GameManager.Instance.receivedInitPositions)*/)
         // {
         //     yield return 0;
         // }
-        PhotonNetwork.room.IsOpen = false;
-        PhotonNetwork.room.IsVisible = false;
+        PhotonNetwork.CurrentRoom.IsOpen = false;
+        PhotonNetwork.CurrentRoom.IsVisible = false;
 
         CancelInvoke("StartGameWithBots");
         Invoke("startGameScene", 3.0f);
@@ -215,17 +299,29 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
 
             if (GameManager.Instance.type == MyGameType.Private)
             {
-                PhotonNetwork.RaiseEvent((int)EnumPhoton.BeginPrivateGame, null, true, null);
+                // Raise event to begin private game
+                PhotonNetwork.RaiseEvent(
+                    (byte)EnumPhoton.BeginPrivateGame,  // Event code (cast to byte)
+                    null,                               // No content
+                    new RaiseEventOptions { Receivers = ReceiverGroup.All }, // Send to all players
+                    SendOptions.SendReliable            // Reliable delivery
+                );
             }
             else
             {
-                PhotonNetwork.RaiseEvent((int)EnumPhoton.StartGame, null, true, null);
+                // Raise event to start the game
+                PhotonNetwork.RaiseEvent(
+                    (byte)EnumPhoton.StartGame,         // Event code (cast to byte)
+                    null,                               // No content
+                    new RaiseEventOptions { Receivers = ReceiverGroup.All }, // Send to all players
+                    SendOptions.SendReliable            // Reliable delivery
+                );
             }
 
         }
         else
         {
-            if (PhotonNetwork.isMasterClient)
+            if (PhotonNetwork.IsMasterClient)
                 WaitForNewPlayer();
         }
     }
@@ -247,7 +343,7 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
 
     public void WaitForNewPlayer()
     {
-        if (PhotonNetwork.isMasterClient && GameManager.Instance.type != MyGameType.Private)
+        if (PhotonNetwork.IsMasterClient && GameManager.Instance.type != MyGameType.Private)
         {
             Debug.Log("START INVOKE");
             CancelInvoke("StartGameWithBots");
@@ -257,9 +353,9 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
 
     public void StartGameWithBots()
     {
-        if (PhotonNetwork.isMasterClient)
+        if (PhotonNetwork.IsMasterClient)
         {
-            if (PhotonNetwork.room.PlayerCount < GameManager.Instance.requiredPlayers)
+            if (PhotonNetwork.CurrentRoom.PlayerCount < GameManager.Instance.requiredPlayers)
             {
                 Debug.Log("Master Client");
                 // PhotonNetwork.RaiseEvent((int)EnumPhoton.StartWithBots, null, true, null);
@@ -275,12 +371,12 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
     public void LoadBots()
     {
         Debug.Log("Close room - add bots");
-        PhotonNetwork.room.IsOpen = false;
-        PhotonNetwork.room.IsVisible = false;
+        PhotonNetwork.CurrentRoom.IsOpen = false;
+        PhotonNetwork.CurrentRoom.IsVisible = false;
 
-        if (PhotonNetwork.isMasterClient)
+        if (PhotonNetwork.IsMasterClient)
         {
-            Invoke("AddBots", 3.0f);
+            Invoke(nameof(AddBots), 3.0f);
         }
         else
         {
@@ -295,12 +391,17 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
 
         Debug.Log("Add Bots with delay");
 
-        if (PhotonNetwork.room.PlayerCount < GameManager.Instance.requiredPlayers)
+        if (PhotonNetwork.CurrentRoom.PlayerCount < GameManager.Instance.requiredPlayers)
         {
 
-            if (PhotonNetwork.isMasterClient)
+            if (PhotonNetwork.IsMasterClient)
             {
-                PhotonNetwork.RaiseEvent((int)EnumPhoton.StartWithBots, null, true, null);
+                PhotonNetwork.RaiseEvent(
+                    (byte)EnumPhoton.StartWithBots, // Event code, cast to byte
+                    null, // No content
+                    new RaiseEventOptions { Receivers = ReceiverGroup.All }, // Send to all players
+                    SendOptions.SendReliable // Ensure reliable delivery
+                );
             }
 
             for (int i = 0; i < GameManager.Instance.requiredPlayers - 1; i++)
@@ -882,6 +983,7 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
         },
             (error) =>
             {
+                Debug.Log("PlayFab Title ID: " + PlayFabSettings.TitleId);
                 Debug.Log("Error logging in player with custom ID:");
                 Debug.Log(error.ErrorMessage);
                 GameManager.Instance.connectionLost.showDialog();
@@ -905,29 +1007,94 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
         }
         else
         {
+            //Debug.Log("IND");
+            //GetFriendsListRequest request = new GetFriendsListRequest();
+            //request.IncludeFacebookFriends = true;
+            //PlayFabClientAPI.GetFriendsList(request, (result) =>
+            //{
+
+            //    Debug.Log("Friends list Playfab: " + result.Friends.Count);
+            //    var friends = result.Friends;
+
+            //    List<string> playfabFriends = new List<string>();
+            //    List<string> playfabFriendsName = new List<string>();
+            //    List<string> playfabFriendsFacebookId = new List<string>();
+
+
+            //    chatClient.RemoveFriends(GameManager.Instance.friendsIDForStatus.ToArray());
+
+            //    List<string> friendsToStatus = new List<string>();
+
+
+            //    int index = 0;
+            //    foreach (var friend in friends)
+            //    {
+
+            //        playfabFriends.Add(friend.FriendPlayFabId);
+
+            //        Debug.Log("Title: " + friend.TitleDisplayName);
+            //        GetUserDataRequest getdatarequest = new GetUserDataRequest()
+            //        {
+            //            PlayFabId = friend.TitleDisplayName,
+            //        };
+
+
+            //        int ind2 = index;
+
+            //        PlayFabClientAPI.GetUserData(getdatarequest, (result2) =>
+            //        {
+
+            //            Dictionary<string, UserDataRecord> data2 = result2.Data;
+            //            playfabFriendsName[ind2] = data2["PlayerName"].Value;
+            //            Debug.Log("Added " + data2["PlayerName"].Value);
+            //            GameManager.Instance.facebookFriendsMenu.updateName(ind2, data2["PlayerName"].Value, friend.TitleDisplayName);
+
+            //        }, (error) =>
+            //        {
+
+            //            Debug.Log("Data updated error " + error.ErrorMessage);
+            //        }, null);
+
+            //        playfabFriendsName.Add("");
+
+            //        friendsToStatus.Add(friend.FriendPlayFabId);
+
+            //        index++;
+            //    }
+
+            //    GameManager.Instance.friendsIDForStatus = friendsToStatus;
+
+            //    chatClient.AddFriends(friendsToStatus.ToArray());
+
+            //    GameManager.Instance.facebookFriendsMenu.addPlayFabFriends(playfabFriends, playfabFriendsName, playfabFriendsFacebookId);
+
+            //    if (PlayerPrefs.GetString("LoggedType").Equals("Facebook"))
+            //    {
+            //        fbManager.getFacebookInvitableFriends();
+            //    }
+            //    else
+            //    {
+            //        GameManager.Instance.facebookFriendsMenu.showFriends(null, null, null);
+            //    }
+            //}, OnPlayFabError);
             Debug.Log("IND");
             GetFriendsListRequest request = new GetFriendsListRequest();
-            request.IncludeFacebookFriends = true;
             PlayFabClientAPI.GetFriendsList(request, (result) =>
             {
-
                 Debug.Log("Friends list Playfab: " + result.Friends.Count);
                 var friends = result.Friends;
 
                 List<string> playfabFriends = new List<string>();
-                List<string> playfabFriendsName = new List<string>();
+                Dictionary<int, string> playfabFriendsName = new Dictionary<int, string>();
                 List<string> playfabFriendsFacebookId = new List<string>();
-
 
                 chatClient.RemoveFriends(GameManager.Instance.friendsIDForStatus.ToArray());
 
                 List<string> friendsToStatus = new List<string>();
 
-
                 int index = 0;
                 foreach (var friend in friends)
                 {
-
                     playfabFriends.Add(friend.FriendPlayFabId);
 
                     Debug.Log("Title: " + friend.TitleDisplayName);
@@ -936,35 +1103,36 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
                         PlayFabId = friend.TitleDisplayName,
                     };
 
-
                     int ind2 = index;
 
                     PlayFabClientAPI.GetUserData(getdatarequest, (result2) =>
                     {
-
                         Dictionary<string, UserDataRecord> data2 = result2.Data;
-                        playfabFriendsName[ind2] = data2["PlayerName"].Value;
-                        Debug.Log("Added " + data2["PlayerName"].Value);
-                        GameManager.Instance.facebookFriendsMenu.updateName(ind2, data2["PlayerName"].Value, friend.TitleDisplayName);
-
+                        if (data2.ContainsKey("PlayerName"))
+                        {
+                            playfabFriendsName[ind2] = data2["PlayerName"].Value;
+                            Debug.Log("Added " + data2["PlayerName"].Value);
+                            GameManager.Instance.facebookFriendsMenu.updateName(ind2, data2["PlayerName"].Value, friend.TitleDisplayName);
+                        }
+                        else
+                        {
+                            Debug.LogWarning("PlayerName not found for " + friend.TitleDisplayName);
+                        }
                     }, (error) =>
                     {
-
                         Debug.Log("Data updated error " + error.ErrorMessage);
                     }, null);
 
-                    playfabFriendsName.Add("");
-
                     friendsToStatus.Add(friend.FriendPlayFabId);
-
                     index++;
                 }
 
                 GameManager.Instance.friendsIDForStatus = friendsToStatus;
 
+                // Execute after processing all friends
                 chatClient.AddFriends(friendsToStatus.ToArray());
 
-                GameManager.Instance.facebookFriendsMenu.addPlayFabFriends(playfabFriends, playfabFriendsName, playfabFriendsFacebookId);
+                GameManager.Instance.facebookFriendsMenu.addPlayFabFriends(playfabFriends, new List<string>(playfabFriendsName.Values), playfabFriendsFacebookId);
 
                 if (PlayerPrefs.GetString("LoggedType").Equals("Facebook"))
                 {
@@ -975,6 +1143,7 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
                     GameManager.Instance.facebookFriendsMenu.showFriends(null, null, null);
                 }
             }, OnPlayFabError);
+
         }
 
 
@@ -1001,14 +1170,25 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
     {
         string photonToken = result.PhotonCustomAuthenticationToken;
         Debug.Log(string.Format("Yay, logged in session token: {0}", photonToken));
-        PhotonNetwork.AuthValues = new AuthenticationValues();
-        PhotonNetwork.AuthValues.AuthType = CustomAuthenticationType.Custom;
+
+        PhotonNetwork.AuthValues = new Photon.Realtime.AuthenticationValues();// = new AuthenticationValues();
+        PhotonNetwork.AuthValues.AuthType = Photon.Realtime.CustomAuthenticationType.Custom;
         PhotonNetwork.AuthValues.AddAuthParameter("username", this.PlayFabId);
         PhotonNetwork.AuthValues.AddAuthParameter("Token", result.PhotonCustomAuthenticationToken);
         PhotonNetwork.AuthValues.UserId = this.PlayFabId;
-        PhotonNetwork.ConnectUsingSettings("1.4");
-        PhotonNetwork.playerName = this.PlayFabId;
+
+        // Connect to Photon only if not already connected
+        if (!PhotonNetwork.IsConnected)
+        {
+            PhotonNetwork.ConnectUsingSettings(); // Automatically uses the settings from PhotonServerSettings
+        }
+
+        PhotonNetwork.NickName = this.PlayFabId; // Use NickName instead of playerName (PhotonNetwork.playerName is deprecated)
+
+        // Store token for further use if needed
         authToken = result.PhotonCustomAuthenticationToken;
+
+        // Call additional methods
         getPlayerDataRequest();
         connectToChat();
 
@@ -1018,16 +1198,16 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
     {
         chatClient = new ChatClient(this);
         GameManager.Instance.chatClient = chatClient;
-        ExitGames.Client.Photon.Chat.AuthenticationValues authValues = new ExitGames.Client.Photon.Chat.AuthenticationValues();
+        Photon.Chat.AuthenticationValues authValues = new Photon.Chat.AuthenticationValues();
         authValues.UserId = this.PlayFabId;
-        authValues.AuthType = ExitGames.Client.Photon.Chat.CustomAuthenticationType.Custom;
+        authValues.AuthType = Photon.Chat.CustomAuthenticationType.Custom;
         authValues.AddAuthParameter("username", this.PlayFabId);
         authValues.AddAuthParameter("Token", authToken);
         chatClient.Connect(StaticStrings.PhotonChatID, "1.4", authValues);
     }
 
 
-    public override void OnPhotonCustomRoomPropertiesChanged(ExitGames.Client.Photon.Hashtable propertiesThatChanged)
+    public override void OnRoomPropertiesUpdate(ExitGames.Client.Photon.Hashtable propertiesThatChanged)
     {
 
         Debug.Log("Custom properties changed: " + DateTime.Now.ToString());
@@ -1040,7 +1220,7 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
         chatClient.Subscribe(new string[] { "invitationsChannel" });
     }
 
-    public override void OnPhotonPlayerDisconnected(PhotonPlayer player)
+    public override void OnPlayerLeftRoom(Player player)
     {
         GameManager.Instance.opponentDisconnected = true;
 
@@ -1049,7 +1229,7 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
         if (GameManager.Instance.controlAvatars != null)
         {
             Debug.Log("PLAYER DISCONNECTED " + player.NickName);
-            if (PhotonNetwork.room.PlayerCount > 1)
+            if (PhotonNetwork.CurrentRoom.PlayerCount > 1)
             {
                 GameManager.Instance.controlAvatars.startButtonPrivate.GetComponent<Button>().interactable = true;
             }
@@ -1138,9 +1318,9 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
     }
 
 
-    public override void OnDisconnectedFromPhoton()
+    public override void OnDisconnected(DisconnectCause cause)
     {
-        Debug.Log("Disconnected from photon");
+        Debug.Log("Disconnected from Photon. Reason: " + cause.ToString());
         switchUser();
     }
 
@@ -1355,14 +1535,14 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
         Debug.Log("OnJoinedRoom");
 
 
-        if (PhotonNetwork.room.CustomProperties.ContainsKey("bt"))
+        if (PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("bt"))
         {
-            extractBotMoves(PhotonNetwork.room.CustomProperties["bt"].ToString());
+            extractBotMoves(PhotonNetwork.CurrentRoom.CustomProperties["bt"].ToString());
         }
 
-        if (PhotonNetwork.room.CustomProperties.ContainsKey("fp"))
+        if (PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("fp"))
         {
-            GameManager.Instance.firstPlayerInGame = int.Parse(PhotonNetwork.room.CustomProperties["fp"].ToString());
+            GameManager.Instance.firstPlayerInGame = int.Parse(PhotonNetwork.CurrentRoom.CustomProperties["fp"].ToString());
         }
         else
         {
@@ -1373,40 +1553,40 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
 
         GameManager.Instance.avatarOpponent = null;
 
-        Debug.Log("Players in room " + PhotonNetwork.room.PlayerCount);
+        Debug.Log("Players in room " + PhotonNetwork.CurrentRoom.PlayerCount);
 
         GameManager.Instance.currentPlayersCount = 1;
 
         GameManager.Instance.controlAvatars.setCancelButton();
-        if (PhotonNetwork.room.PlayerCount == 1)
+        if (PhotonNetwork.CurrentRoom.PlayerCount == 1)
         {
             GameManager.Instance.roomOwner = true;
             WaitForNewPlayer();
         }
-        else if (PhotonNetwork.room.PlayerCount >= GameManager.Instance.requiredPlayers)
+        else if (PhotonNetwork.CurrentRoom.PlayerCount >= GameManager.Instance.requiredPlayers)
         {
-            PhotonNetwork.room.IsOpen = false;
-            PhotonNetwork.room.IsVisible = false;
+            PhotonNetwork.CurrentRoom.IsOpen = false;
+            PhotonNetwork.CurrentRoom.IsVisible = false;
         }
 
         if (!roomOwner)
         {
             GameManager.Instance.backButtonMatchPlayers.SetActive(false);
 
-            for (int i = 0; i < PhotonNetwork.otherPlayers.Length; i++)
+            for (int i = 0; i < PhotonNetwork.PlayerListOthers.Length; i++)
             {
 
                 int ii = i;
                 int index = GetFirstFreeSlot();
-                GameManager.Instance.opponentsIDs[index] = PhotonNetwork.otherPlayers[ii].NickName;
+                GameManager.Instance.opponentsIDs[index] = PhotonNetwork.PlayerListOthers[ii].NickName;
 
                 GetUserDataRequest getdatarequest = new GetUserDataRequest()
                 {
-                    PlayFabId = PhotonNetwork.otherPlayers[ii].NickName,
+                    PlayFabId = PhotonNetwork.PlayerListOthers[ii].NickName,
 
                 };
 
-                string otherID = PhotonNetwork.otherPlayers[ii].NickName;
+                string otherID = PhotonNetwork.PlayerListOthers[ii].NickName;
 
 
                 PlayFabClientAPI.GetUserData(getdatarequest, (result) =>
@@ -1490,7 +1670,7 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
         roomOwner = true;
         GameManager.Instance.roomOwner = true;
         GameManager.Instance.currentPlayersCount = 1;
-        GameManager.Instance.controlAvatars.updateRoomID(PhotonNetwork.room.Name);
+        GameManager.Instance.controlAvatars.updateRoomID(PhotonNetwork.CurrentRoom.Name);
     }
 
     public override void OnLeftRoom()
@@ -1515,21 +1695,21 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
         return index;
     }
 
-    public override void OnPhotonCreateRoomFailed(object[] codeAndMsg)
+    public override void OnCreateRoomFailed(short returnCode, string message)
     {
-        Debug.Log("Failed to create room");
+        Debug.Log($"Failed to create room. Error Code: {returnCode}, Message: {message}");
         CreatePrivateRoom();
     }
 
-    public override void OnPhotonJoinRoomFailed(object[] codeAndMsg)
+    public override void OnJoinRoomFailed(short returnCode, string message)
     {
-        Debug.Log("Failed to join room");
+        Debug.Log($"Failed to join room. Error Code: {returnCode}, Message: {message}");
 
         if (GameManager.Instance.type == MyGameType.Private)
         {
             if (GameManager.Instance.controlAvatars != null)
             {
-                GameManager.Instance.controlAvatars.ShowJoinFailed(codeAndMsg[1].ToString());
+                GameManager.Instance.controlAvatars.ShowJoinFailed(message);
             }
         }
         else
@@ -1538,12 +1718,13 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
         }
     }
 
+
     private void GetPlayerDataRequest(string playerID)
     {
 
     }
 
-    public override void OnPhotonPlayerConnected(PhotonPlayer newPlayer)
+    public override void OnPlayerEnteredRoom(Player newPlayer)
     {
         CancelInvoke("StartGameWithBots");
 
@@ -1552,13 +1733,13 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
 
 
 
-        if (PhotonNetwork.room.PlayerCount >= GameManager.Instance.requiredPlayers)
+        if (PhotonNetwork.CurrentRoom.PlayerCount >= GameManager.Instance.requiredPlayers)
         {
-            PhotonNetwork.room.IsOpen = false;
-            PhotonNetwork.room.IsVisible = false;
+            PhotonNetwork.CurrentRoom.IsOpen = false;
+            PhotonNetwork.CurrentRoom.IsVisible = false;
         }
 
-        if (PhotonNetwork.room.PlayerCount > 1)
+        if (PhotonNetwork.CurrentRoom.PlayerCount > 1)
         {
             GameManager.Instance.controlAvatars.startButtonPrivate.GetComponent<Button>().interactable = true;
         }
@@ -1661,5 +1842,15 @@ public class PlayFabManager : Photon.PunBehaviour, IChatClientListener
 
         GameManager.Instance.opponentsAvatars[index] = Sprite.Create(www.texture, new Rect(0, 0, www.texture.width, www.texture.height), new Vector2(0.5f, 0.5f), 32);
         GameManager.Instance.controlAvatars.PlayerJoined(index, id);
+    }
+
+    public void OnUserSubscribed(string channel, string user)
+    {
+        throw new NotImplementedException();
+    }
+
+    public void OnUserUnsubscribed(string channel, string user)
+    {
+        throw new NotImplementedException();
     }
 }

@@ -17,6 +17,7 @@ using System.Collections;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using AssemblyCSharp;
+using Photon.Pun;
 
 public class YouWinMessageChangeSprite : MonoBehaviour
 {
@@ -48,7 +49,7 @@ public class YouWinMessageChangeSprite : MonoBehaviour
             GameManager.Instance.roomOwner = false;
             GameManager.Instance.resetAllData();
             SceneManager.LoadScene("MenuScene");
-            PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
+            ////sajidPhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
             // if (GameManager.Instance.offlineMode && StaticStrings.showAdWhenLeaveGame)
             //     AdsManager.Instance.adsScript.ShowAd();
 

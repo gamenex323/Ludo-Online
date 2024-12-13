@@ -12,6 +12,7 @@ daily assets update for try.
 U should buy the asset from home store if u use it in your project!
 */
 
+using Photon.Pun;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -54,7 +55,7 @@ public class GameFinishWindowController : MonoBehaviour
             AvatarsMain[i].SetActive(true);
             AvatarsImage[i].GetComponent<Image>().sprite = playersFinished[i].avatar;
             Names[i].GetComponent<Text>().text = playersFinished[i].name;
-            if (playersFinished[i].id.Equals(PhotonNetwork.player.NickName))
+            if (playersFinished[i].id.Equals(PhotonNetwork.LocalPlayer.NickName))
             {
                 Backgrounds[i].SetActive(true);
             }
@@ -70,7 +71,7 @@ public class GameFinishWindowController : MonoBehaviour
             AvatarsMain[i].SetActive(true);
             AvatarsImage[i].GetComponent<Image>().sprite = otherPlayers[counter].avatar;
             Names[i].GetComponent<Text>().text = otherPlayers[counter].name;
-            if (otherPlayers[counter].id.Equals(PhotonNetwork.player.NickName))
+            if (otherPlayers[counter].id.Equals(PhotonNetwork.LocalPlayer.NickName))
             {
                 Backgrounds[i].SetActive(true);
             }

@@ -12,6 +12,9 @@ daily assets update for try.
 U should buy the asset from home store if u use it in your project!
 */
 
+using ExitGames.Client.Photon;
+using Photon.Pun;
+using Photon.Realtime;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -314,7 +317,16 @@ public class LudoPawnController : MonoBehaviour
 
         string data = index + ";" + ludoController.gUIController.GetCurrentPlayerIndex() + ";" + ludoController.steps;
 
-        PhotonNetwork.RaiseEvent((int)EnumGame.PawnMove, data, true, null);
+        // Create an instance of RaiseEventOptions
+        RaiseEventOptions options = new RaiseEventOptions
+        {
+            Receivers = ReceiverGroup.All, // Send to all players
+            InterestGroup = 0, // Use 0 if no group restrictions are needed
+            CachingOption = EventCaching.DoNotCache // Optional: decide on caching behavior
+        };
+
+        // Raise the event with the options object
+        PhotonNetwork.RaiseEvent((int)EnumGame.PawnMove, data, options, SendOptions.SendReliable);
 
         if (pawnInJoint != null) ludoController.steps /= 2;
         GameManager.Instance.diceShot = true;

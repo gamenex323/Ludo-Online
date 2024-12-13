@@ -18,6 +18,9 @@ using UnityEngine.UI;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using AssemblyCSharp;
+using Photon.Pun;
+using Photon.Realtime;
+using ExitGames.Client.Photon;
 
 public class ControlAvatars : MonoBehaviour
 {
@@ -116,13 +119,27 @@ public class ControlAvatars : MonoBehaviour
         if (GameManager.Instance.type == MyGameType.Private && !GameManager.Instance.JoinedByID)
         {
             Debug.Log("Timeout infinity");
-            PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
+
+            PhotonNetwork.ConnectUsingSettings();
+
+           // PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong;
+            // Start timeout timer for manual timeout handling
+            connectionStartTime = Time.time;
+
+            // Optionally, try to disconnect or reconnect to Photon
+            PhotonNetwork.Disconnect(); // Example: disconnect from the Photon network
         }
         else
         {
             Debug.Log("Timeout 0.2s");
-            PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeout;
+            // Start timeout timer for manual timeout handling
+            connectionStartTime = Time.time;
+
+            // Optionally, try to disconnect or reconnect to Photon
+            PhotonNetwork.Disconnect(); // Example: disconnect from the Photon network
+            //PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeout;
         }
+
 
         GameSceneLoaded = false;
 
@@ -243,12 +260,12 @@ public class ControlAvatars : MonoBehaviour
 
             if (GameManager.Instance.currentPlayersCount >= GameManager.Instance.requiredPlayers)
             {
-                if (PhotonNetwork.isMasterClient)
+                if (PhotonNetwork.IsMasterClient)
                     GameManager.Instance.playfabManager.StartGame();
             }
             else
             {
-                if (PhotonNetwork.isMasterClient)
+                if (PhotonNetwork.IsMasterClient)
                 {
                     GameManager.Instance.playfabManager.WaitForNewPlayer();
                     Debug.Log("INVOKE PLAYJOINED");
@@ -335,7 +352,7 @@ public class ControlAvatars : MonoBehaviour
 
 
 
-                    if (PhotonNetwork.playerList.Length < 2 || playerRejected)
+                    if (PhotonNetwork.PlayerList.Length < 2 || playerRejected)
                     {
                         playerDisconnected();
                     }
@@ -358,6 +375,11 @@ public class ControlAvatars : MonoBehaviour
 
 
 
+        }
+        if (PhotonNetwork.NetworkClientState == ClientState.Disconnected && Time.time - connectionStartTime > timeoutDuration)
+        {
+            Debug.Log("Connection timeout reached, handle accordingly!");
+            HandleTimeout();
         }
     }
 
@@ -573,16 +595,29 @@ public class ControlAvatars : MonoBehaviour
         PhotonNetwork.LeaveRoom();
         Invoke("cancelGame", 5.0f);
     }
-
+    private float timeoutDuration = 10f; // Timeout duration in seconds
+    private float connectionStartTime;
     private void cancelGame()
     {
         cantPlayNowOppo.SetActive(false);
         matchPlayersCanvas.SetActive(false);
-        PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
+        //PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; 
+
+        // Start timeout timer for manual timeout handling
+        connectionStartTime = Time.time;
+
+        // Optionally, try to disconnect or reconnect to Photon
+        PhotonNetwork.Disconnect(); // Example: disconnect from the Photon network
         Debug.Log("Timeout 1");
         //reset ();
     }
 
+    private void HandleTimeout()
+    {
+        // Handle timeout logic here: retry connection, show error, etc.
+        PhotonNetwork.ConnectUsingSettings(); // Retry connection
+        Debug.Log("Retrying connection...");
+    }
     public void StartGamePrivate()
     {
         //PhotonNetwork.RaiseEvent((int)EnumPhoton.BeginPrivateGame, null, true, null);
@@ -595,10 +630,17 @@ public class ControlAvatars : MonoBehaviour
         if (!GameManager.Instance.offlineMode)
         {
 
-            PhotonNetwork.RaiseEvent(199, GameManager.Instance.cueIndex + "-" + GameManager.Instance.cueTime, true, null);
+            RaiseEventOptions options = new RaiseEventOptions
+            {
+                Receivers = ReceiverGroup.All,  // You can set this to specify which players receive the event (e.g., All, MasterClient, etc.)
+                CachingOption = EventCaching.DoNotCache // This is optional; you can set it based on your needs
+            };
+
+            // Send the event
+            PhotonNetwork.RaiseEvent(199, GameManager.Instance.cueIndex + "-" + GameManager.Instance.cueTime, options, SendOptions.SendReliable);
         }
 
-        if (PhotonNetwork.playerList.Length < 2)
+        if (PhotonNetwork.PlayerList.Length < 2)
         {
             playerDisconnected();
         }
@@ -611,12 +653,12 @@ public class ControlAvatars : MonoBehaviour
     {
         if (pauseStatus)
         {
-            PhotonNetwork.SendOutgoingCommands();
+            //PhotonNetwork.SendOutgoingCommands();
             Debug.Log("Application pause");
         }
         else
         {
-            PhotonNetwork.SendOutgoingCommands();
+            //PhotonNetwork.SendOutgoingCommands();
             Debug.Log("Application resume");
         }
     }
@@ -655,13 +697,19 @@ public class ControlAvatars : MonoBehaviour
 
     public void cancelGameInvoke()
     {
-        Debug.Log("Length: " + PhotonNetwork.otherPlayers.Length);
-        if (!foundPlayer && PhotonNetwork.otherPlayers.Length == 0)
+        Debug.Log("Length: " + PhotonNetwork.PlayerListOthers.Length);
+        if (!foundPlayer && PhotonNetwork.PlayerListOthers.Length == 0)
         {
 
             PhotonNetwork.LeaveRoom();
             matchPlayersCanvas.SetActive(false);
-            PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
+            
+            //PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong;
+            // Start timeout timer for manual timeout handling
+            connectionStartTime = Time.time;
+            // Optionally, try to disconnect or reconnect to Photon
+            PhotonNetwork.Disconnect(); // Example: disconnect from the Photon network
+            
             Debug.Log("Timeout 2");
             GameManager.Instance.playfabManager.imReady = false;
             //GameObject.Find ("PlayFabManager").GetComponent <PlayFabManager> ().imReady = false;

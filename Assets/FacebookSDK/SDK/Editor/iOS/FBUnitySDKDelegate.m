@@ -16,21 +16,32 @@
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#import <FBSDKCoreKit/FBSDKCoreKit.h>
 #import "FBUnitySDKDelegate.h"
-
 #import "FBUnityUtility.h"
 
 NSString *const FBUnityMessageName_OnAppRequestsComplete = @"OnAppRequestsComplete";
 NSString *const FBUnityMessageName_OnGetAppLinkComplete = @"OnGetAppLinkComplete";
+NSString *const FBUnityMessageName_OnFriendFinderComplete = @"OnFriendFinderComplete";
 NSString *const FBUnityMessageName_OnGroupCreateComplete = @"OnGroupCreateComplete";
 NSString *const FBUnityMessageName_OnGroupJoinComplete = @"OnGroupJoinComplete";
 NSString *const FBUnityMessageName_OnInitComplete = @"OnInitComplete";
 NSString *const FBUnityMessageName_OnLoginComplete = @"OnLoginComplete";
 NSString *const FBUnityMessageName_OnLogoutComplete = @"OnLogoutComplete";
 NSString *const FBUnityMessageName_OnShareLinkComplete = @"OnShareLinkComplete";
-NSString *const FBUnityMessageName_OnAppInviteComplete = @"OnAppInviteComplete";
 NSString *const FBUnityMessageName_OnFetchDeferredAppLinkComplete = @"OnFetchDeferredAppLinkComplete";
 NSString *const FBUnityMessageName_OnRefreshCurrentAccessTokenComplete = @"OnRefreshCurrentAccessTokenComplete";
+NSString *const FBUnityMessageName_OnUploadImageToMediaLibraryComplete = @"OnUploadImageToMediaLibraryComplete";
+NSString *const FBUnityMessageName_OnUploadVideoToMediaLibraryComplete = @"OnUploadVideoToMediaLibraryComplete";
+NSString *const FBUnityMessageName_OnCreateGamingContextComplete = @"OnCreateGamingContextComplete";
+NSString *const FBUnityMessageName_OnSwitchGamingContextComplete = @"OnSwitchGamingContextComplete";
+NSString *const FBUnityMessageName_OnChooseGamingContextComplete = @"OnChooseGamingContextComplete";
+NSString *const FBUnityMessageName_OnGetCurrentGamingContextComplete = @"OnGetCurrentGamingContextComplete";
+NSString *const FBUnityMessageName_OnGetTournamentsComplete = @"OnGetTournamentsComplete";
+NSString *const FBUnityMessageName_OnUpdateTournamentComplete = @"OnUpdateTournamentComplete";
+NSString *const FBUnityMessageName_OnTournamentDialogSuccess = @"OnTournamentDialogSuccess";
+NSString *const FBUnityMessageName_OnTournamentDialogCancel = @"OnTournamentDialogCancel";
+NSString *const FBUnityMessageName_OnTournamentDialogError = @"OnTournamentDialogError";
 
 static NSMutableArray *g_instances;
 
@@ -58,46 +69,6 @@ static NSMutableArray *g_instances;
 - (void)complete
 {
   [g_instances removeObject:self];
-}
-
-#pragma mark - AppGroupAddDelegate
-
-- (void)appGroupAddDialog:(FBSDKAppGroupAddDialog *)appGroupAddDialog didCompleteWithResults:(NSDictionary *)results
-{
-  [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnGroupCreateComplete userData:results requestId:_requestID];
-  [self complete];
-}
-
-- (void)appGroupAddDialog:(FBSDKAppGroupAddDialog *)appGroupAddDialog didFailWithError:(NSError *)error
-{
-  [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnGroupCreateComplete error:error requestId:_requestID];
-  [self complete];
-}
-
-- (void)appGroupAddDialogDidCancel:(FBSDKAppGroupAddDialog *)appGroupAddDialog
-{
-  [FBUnityUtility sendCancelToUnity:FBUnityMessageName_OnGroupCreateComplete requestId:_requestID];
-  [self complete];
-}
-
-#pragma mark - AppGroupJoinDelegate
-
-- (void)appGroupJoinDialog:(FBSDKAppGroupJoinDialog *)appGroupJoinDialog didCompleteWithResults:(NSDictionary *)results
-{
-  [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnGroupJoinComplete userData:results requestId:_requestID];
-  [self complete];
-}
-
-- (void)appGroupJoinDialog:(FBSDKAppGroupJoinDialog *)appGroupJoinDialog didFailWithError:(NSError *)error
-{
-  [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnGroupJoinComplete error:error requestId:_requestID];
-  [self complete];
-}
-
-- (void)appGroupJoinDialogDidCancel:(FBSDKAppGroupJoinDialog *)appGroupJoinDialog
-{
-  [FBUnityUtility sendCancelToUnity:FBUnityMessageName_OnGroupJoinComplete requestId:_requestID];
-  [self complete];
 }
 
 #pragma mark - GameRequestDelegate
@@ -145,28 +116,57 @@ static NSMutableArray *g_instances;
   [self complete];
 }
 
-#pragma mark - FBSDKAppInviteDialogDelegate
+#pragma mark - FBSDKContextDialogDelegate
 
-- (void)appInviteDialog:(FBSDKAppInviteDialog *)appInviteDialog didCompleteWithResults:(NSDictionary *)results
+- (void)contextDialogDidComplete:(NSObject<FBSDKContextDialogDelegate>*)contextDialog;
 {
-  if (results.count == 0) {
-    // We no longer always send back a postId. In cases where the response is empty,
-    // stuff in a didComplete so that Unity doesn't treat it as a malformed response.
-    results = @{ @"didComplete" : @"1" };
-  } else if([[results objectForKey:@"completionGesture"] isEqualToString:@"cancel"]) {
-    // The app invitie dialog doesn't have a cancel but returns "completionGesture" "cancel"
-    [FBUnityUtility sendCancelToUnity:FBUnityMessageName_OnAppInviteComplete requestId:_requestID];
-    [self complete];
+  if ([contextDialog isKindOfClass:[FBSDKChooseContextDialog class]]) {
+    [FBUnityUtility sendMessageToUnity: FBUnityMessageName_OnChooseGamingContextComplete userData: NULL requestId:_requestID];
+  } else if ([contextDialog isKindOfClass:[FBSDKSwitchContextDialog class]]) {
+    [FBUnityUtility sendMessageToUnity: FBUnityMessageName_OnSwitchGamingContextComplete userData: NULL requestId:_requestID];
+  } else if ([contextDialog isKindOfClass:[FBSDKCreateContextDialog class]]) {
+    [FBUnityUtility sendMessageToUnity: FBUnityMessageName_OnCreateGamingContextComplete userData: NULL requestId:_requestID];
   }
-
-  [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnAppInviteComplete userData:results requestId:_requestID];
   [self complete];
 }
 
-- (void)appInviteDialog:(FBSDKAppInviteDialog *)appInviteDialog didFailWithError:(NSError *)error
+- (void)contextDialog:(NSObject<FBSDKContextDialogDelegate>*)contextDialog didFailWithError:(NSError *)error
 {
-  [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnAppInviteComplete error:error requestId:_requestID];
+  if ([contextDialog isKindOfClass:[FBSDKChooseContextDialog class]]) {
+    [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnChooseGamingContextComplete error:error requestId:_requestID];
+  } else if ([contextDialog isKindOfClass:[FBSDKSwitchContextDialog class]]) {
+    [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnSwitchGamingContextComplete error:error requestId:_requestID];
+  } else if ([contextDialog isKindOfClass:[FBSDKCreateContextDialog class]]) {
+    [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnCreateGamingContextComplete error:error requestId:_requestID];
+  }
   [self complete];
+}
+
+- (void)contextDialogDidCancel:(NSObject<FBSDKContextDialogDelegate>*)contextDialog
+{
+  if ([contextDialog isKindOfClass:[FBSDKChooseContextDialog class]]) {
+    [FBUnityUtility sendCancelToUnity:FBUnityMessageName_OnChooseGamingContextComplete requestId:_requestID];
+  } else if ([contextDialog isKindOfClass:[FBSDKSwitchContextDialog class]]) {
+    [FBUnityUtility sendCancelToUnity:FBUnityMessageName_OnSwitchGamingContextComplete requestId:_requestID];
+  } else if ([contextDialog isKindOfClass:[FBSDKCreateContextDialog class]]) {
+    [FBUnityUtility sendCancelToUnity:FBUnityMessageName_OnCreateGamingContextComplete requestId:_requestID];
+  }
+
+  [self complete];
+}
+
+#pragma mark - FBSDKShareTournamentDialogDelegate
+
+- (void)didCancelWithDialog:(FBSDKShareTournamentDialog * _Nonnull)dialog {
+    [FBUnityUtility sendCancelToUnity:FBUnityMessageName_OnTournamentDialogCancel requestId:_requestID];
+}
+
+- (void)didCompleteWithDialog:(FBSDKShareTournamentDialog * _Nonnull)dialog tournament:(FBSDKTournament * _Nonnull)tournament {
+    [FBUnityUtility sendMessageToUnity: FBUnityMessageName_OnTournamentDialogSuccess userData: [tournament toDictionary] requestId:_requestID];
+}
+
+- (void)didFailWithError:(NSError * _Nonnull)error dialog:(FBSDKShareTournamentDialog * _Nonnull)dialog {
+    [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnTournamentDialogError error:error requestId:_requestID];
 }
 
 @end

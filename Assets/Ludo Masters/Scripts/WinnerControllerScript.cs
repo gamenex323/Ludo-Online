@@ -20,8 +20,11 @@ using AssemblyCSharp;
 using PlayFab.ClientModels;
 using Facebook.Unity;
 using System;
+using Photon.Pun;
+using Photon.Realtime;
+using ExitGames.Client.Photon;
 
-public class WinnerControllerScript : MonoBehaviour
+public class WinnerControllerScript : MonoBehaviour, IOnEventCallback
 {
 
     public GameObject myObject;
@@ -77,7 +80,7 @@ public class WinnerControllerScript : MonoBehaviour
         {
 
 
-            PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
+            ////sajidPhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
 
             if (GameManager.Instance.payoutCoins > GameManager.Instance.myPlayerData.GetCoins())
             {
@@ -241,7 +244,18 @@ public class WinnerControllerScript : MonoBehaviour
     {
         Debug.Log("Button Clicked " + index);
         if (!GameManager.Instance.offlineMode)
-            PhotonNetwork.RaiseEvent(193, index, true, null);
+        {
+            // Create an instance of RaiseEventOptions
+            RaiseEventOptions options = new RaiseEventOptions
+            {
+                Receivers = ReceiverGroup.All, // Send to all players
+                InterestGroup = 0, // Use 0 if no group restrictions are needed
+                CachingOption = EventCaching.DoNotCache // Optional: decide on caching behavior
+            };
+
+            // Raise the event with the options object
+            PhotonNetwork.RaiseEvent(193, 1, options, SendOptions.SendReliable);
+        }
         ChatMessagesObject.GetComponent<Animator>().Play("hideMessageDialog");
         messageDialogVisible = false;
 
@@ -264,9 +278,20 @@ public class WinnerControllerScript : MonoBehaviour
         //     AdsManager.Instance.adsScript.ShowAd();
         SceneManager.LoadScene("MenuScene");
         Debug.Log("Timeout 6");
-        PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
+        ////sajidPhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
         if (!GameManager.Instance.offlineMode)
-            PhotonNetwork.RaiseEvent(194, 1, true, null);
+        {
+            // Create an instance of RaiseEventOptions
+            RaiseEventOptions options = new RaiseEventOptions
+            {
+                Receivers = ReceiverGroup.All, // Send to all players
+                InterestGroup = 0, // Use 0 if no group restrictions are needed
+                CachingOption = EventCaching.DoNotCache // Optional: decide on caching behavior
+            };
+
+            // Raise the event with the options object
+            PhotonNetwork.RaiseEvent(194, 1, options, SendOptions.SendReliable);
+        }
         removeOnEventCall();
 
         GameManager.Instance.cueController.removeOnEventCall();
@@ -284,8 +309,19 @@ public class WinnerControllerScript : MonoBehaviour
         {
             sentRematch = true;
             Debug.Log("Send message");
-            if (!GameManager.Instance.offlineMode)
-                PhotonNetwork.RaiseEvent(195, 1, true, null);
+            if (!GameManager.Instance.offlineMode) {
+                // Create an instance of RaiseEventOptions
+                RaiseEventOptions options = new RaiseEventOptions
+                {
+                    Receivers = ReceiverGroup.All, // Send to all players
+                    InterestGroup = 0, // Use 0 if no group restrictions are needed
+                    CachingOption = EventCaching.DoNotCache // Optional: decide on caching behavior
+                };
+
+                // Raise the event with the options object
+                PhotonNetwork.RaiseEvent(195, 1, options, SendOptions.SendReliable);
+            }
+                //PhotonNetwork.RaiseEvent(195, 1, true, null);
             myMessageBubble.SetActive(true);
             myMessageBubble.transform.GetChild(0).GetComponent<Text>().text = StaticStrings.IWantPlayAgain;
             rematchButton.SetActive(false);
@@ -294,7 +330,18 @@ public class WinnerControllerScript : MonoBehaviour
         {
             Debug.Log("Send message");
             if (!GameManager.Instance.offlineMode)
-                PhotonNetwork.RaiseEvent(195, 1, true, null);
+            {
+                // Create an instance of RaiseEventOptions
+                RaiseEventOptions options = new RaiseEventOptions
+                {
+                    Receivers = ReceiverGroup.All, // Send to all players
+                    InterestGroup = 0, // Use 0 if no group restrictions are needed
+                    CachingOption = EventCaching.DoNotCache // Optional: decide on caching behavior
+                };
+
+                // Raise the event with the options object
+                PhotonNetwork.RaiseEvent(195, 1, options, SendOptions.SendReliable);
+            }
             rematchButton.SetActive(false);
             GameManager.Instance.resetAllData();
             GameManager.Instance.GameScene = "GameScene";
@@ -316,17 +363,63 @@ public class WinnerControllerScript : MonoBehaviour
 
     void Awake()
     {
-        PhotonNetwork.OnEventCall += this.OnEvent;
+        PhotonNetwork.NetworkingClient.EventReceived += this.OnEvent;
 
     }
 
     public void removeOnEventCall()
     {
-        PhotonNetwork.OnEventCall -= this.OnEvent;
+        PhotonNetwork.NetworkingClient.EventReceived -= this.OnEvent;
     }
+    public void OnEvent(EventData photonEvent)
+    {
+        Debug.Log("Received message");
+        if (photonEvent.Code == 195)
+        {
+            if (sentRematch)
+            {
+                GameManager.Instance.resetAllData();
+                GameManager.Instance.GameScene = "GameScene";
+                if (!GameManager.Instance.gameSceneStarted)
+                {
+                    SceneManager.LoadScene(GameManager.Instance.GameScene);
+                    GameManager.Instance.gameSceneStarted = true;
+                }
+                removeOnEventCall();
+            }
+            else
+            {
+                rematchRequest = true;
+                if (GameManager.Instance.payoutCoins <= GameManager.Instance.myPlayerData.GetCoins())
+                {
+                    oppoMessageBubble.SetActive(true);
+                    oppoMessageBubble.transform.GetChild(0).GetComponent<Text>().text = StaticStrings.IWantPlayAgain;
+                }
+            }
+        }
+        else if (photonEvent.Code == 194)
+        {
+            rematchButton.SetActive(false);
+            oppoMessageBubble.SetActive(true);
+            oppoMessageBubble.transform.GetChild(0).GetComponent<Text>().text = StaticStrings.cantPlayRightNow;
 
-    // Multiplayer data received
-    private void OnEvent(byte eventcode, object content, int senderid)
+        }
+        else if (photonEvent.Code == 193)
+        {
+            string index = (string)photonEvent.CustomData;
+            Debug.Log("INDEX: " + index);
+            oppoMessageBubble.SetActive(true);
+            oppoMessageBubble.transform.GetChild(0).GetComponent<Text>().text = index;
+            if (isGameScene)
+            {
+                CancelInvoke("hideOppoMessageBubble");
+                Invoke("hideOppoMessageBubble", 6.0f);
+            }
+
+        }
+    }
+        // Multiplayer data received
+        private void OnEvent(byte eventcode, object content, int senderid)
     {
         Debug.Log("Received message");
         if (eventcode == 195)
@@ -383,4 +476,5 @@ public class WinnerControllerScript : MonoBehaviour
     {
         myMessageBubble.SetActive(false);
     }
+
 }
