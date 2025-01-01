@@ -1,11 +1,25 @@
-using Photon.Pun;
-using Photon.Realtime;
+/*
+http://www.cgsoso.com/forum-211-1.html
+
+CG搜搜 Unity3d 每日Unity3d插件免费更新 更有VIP资源！
+
+CGSOSO 主打游戏开发，影视设计等CG资源素材。
+
+插件如若商用，请务必官网购买！
+
+daily assets update for try.
+
+U should buy the asset from home store if u use it in your project!
+*/
+
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class EnterPrivateCodeDialogController : MonoBehaviourPunCallbacks
+public class EnterPrivateCodeDialogController : MonoBehaviour
 {
+
     public GameObject inputField;
     public GameObject confirmationText;
     public GameObject joinButton;
@@ -13,7 +27,6 @@ public class EnterPrivateCodeDialogController : MonoBehaviourPunCallbacks
     private InputField field;
     public GameObject GameConfiguration;
     public GameObject failedDialog;
-
     void OnEnable()
     {
         if (field != null)
@@ -24,6 +37,7 @@ public class EnterPrivateCodeDialogController : MonoBehaviourPunCallbacks
             join.interactable = false;
     }
 
+    // Use this for initialization
     void Start()
     {
         field = inputField.GetComponent<InputField>();
@@ -31,8 +45,15 @@ public class EnterPrivateCodeDialogController : MonoBehaviourPunCallbacks
         join.interactable = false;
     }
 
+    // Update is called once per frame
+    void Update()
+    {
+
+    }
+
     public void onValueChanged()
     {
+
         if (field.text.Length < 8)
         {
             confirmationText.SetActive(true);
@@ -51,52 +72,48 @@ public class EnterPrivateCodeDialogController : MonoBehaviourPunCallbacks
         GameManager.Instance.payoutCoins = 0;
         string roomID = field.text;
 
-        // Join the lobby to get the list of rooms
-        PhotonNetwork.JoinLobby();
-    }
+        RoomInfo[] rooms = PhotonNetwork.GetRoomList();
 
-    // This callback is called when the room list updates
-    public override void OnRoomListUpdate(List<RoomInfo> roomList)
-    {
-        Debug.Log("Rooms count: " + roomList.Count);
+        Debug.Log("Rooms count: " + rooms.Length);
 
-        if (roomList.Count == 0)
+        if (rooms.Length == 0)
         {
-            Debug.Log("No rooms available!");
+            Debug.Log("no rooms!");
             failedDialog.SetActive(true);
         }
         else
         {
             bool foundRoom = false;
-            foreach (RoomInfo room in roomList)
+            for (int i = 0; i < rooms.Length; i++)
             {
-                if (room.Name.Equals(field.text))
+                if (rooms[i].Name.Equals(roomID))
                 {
                     foundRoom = true;
-                    if (room.CustomProperties.ContainsKey("pc"))
+                    if (rooms[i].CustomProperties.ContainsKey("pc"))
                     {
-                        GameManager.Instance.payoutCoins = int.Parse(room.CustomProperties["pc"].ToString());
+                        GameManager.Instance.payoutCoins = int.Parse(rooms[i].CustomProperties["pc"].ToString());
 
                         if (GameManager.Instance.myPlayerData.GetCoins() >= GameManager.Instance.payoutCoins)
                         {
-                            PhotonNetwork.JoinRoom(room.Name);
-                            // You can initiate the game start here if needed
-                            GameConfiguration.GetComponent<GameConfigrationController>().startGame();
+                            PhotonNetwork.JoinRoom(roomID);
                         }
+                        GameConfiguration.GetComponent<GameConfigrationController>().startGame();
                     }
                     else
                     {
                         GameManager.Instance.payoutCoins = int.MaxValue;
                         GameConfiguration.GetComponent<GameConfigrationController>().startGame();
                     }
-                    break;
                 }
             }
-
             if (!foundRoom)
             {
                 failedDialog.SetActive(true);
             }
         }
+
+
+
+
     }
 }

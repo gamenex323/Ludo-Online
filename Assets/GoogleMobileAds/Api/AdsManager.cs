@@ -36,11 +36,11 @@ public class AdsManager
 
     public AdsController interstitialAds;
 
-    //public AdMobObjectController adsScript;
+    public AdMobObjectController adsScript;
 
     public void showAd(AdLocation location)
     {
-        //adsScript.ShowAd(location);
+        adsScript.ShowAd(location);
     }
 
 }

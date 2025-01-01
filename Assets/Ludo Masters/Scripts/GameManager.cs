@@ -14,8 +14,9 @@ U should buy the asset from home store if u use it in your project!
 
 using System;
 using UnityEngine;
+using ExitGames.Client.Photon.Chat;
 using System.Collections.Generic;
-using Photon.Chat;
+
 
 public class GameManager
 {
@@ -139,7 +140,7 @@ public class GameManager
     public int opponentCueTime = 0;
     public ControlAvatars controlAvatars;
     public InterstitialAdsControllerScript interstitialAds;
-    //public AdMobObjectController adsScript;
+    public AdMobObjectController adsScript;
     public ConnectionLostController connectionLost;
     public bool opponentActive = true;
     public IMiniGame miniGame;

@@ -16,21 +16,21 @@
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#import <SafariServices/SafariServices.h>
-#import <AuthenticationServices/AuthenticationServices.h>
-#import <FBSDKCoreKit/FBSDKCoreKit-Swift.h>
-#import <FBSDKLoginKit/FBSDKLoginKit-Swift.h>
+#include "FBUnityInterface.h"
+
+#import <FBSDKCoreKit/FBSDKCoreKit.h>
+#import <FBSDKLoginKit/FBSDKLoginKit.h>
+#import <FBSDKShareKit/FBSDKShareKit.h>
 #import <Foundation/NSJSONSerialization.h>
 
-#include "FBUnityInterface.h"
 #include "FBUnitySDKDelegate.h"
 #include "FBUnityUtility.h"
 #include "FBSDK+Internal.h"
 
+static FBUnityInterface *_instance = [FBUnityInterface sharedInstance];
+
 @interface FBUnityInterface()
-
 @property (nonatomic, copy) NSString *openURLString;
-
 @end
 
 @implementation FBUnityInterface
@@ -39,20 +39,28 @@
 
 + (FBUnityInterface *)sharedInstance
 {
-  static dispatch_once_t pred;
-  static FBUnityInterface *shared = nil;
-
-  dispatch_once(&pred, ^{
-    shared = [[FBUnityInterface alloc] init];
-    shared.shareDialogMode = ShareDialogMode::AUTOMATIC;
-  });
-
-  return shared;
+  return _instance;
 }
 
-+ (void)load
++ (void)initialize {
+  if(!_instance) {
+    _instance = [[FBUnityInterface alloc] init];
+  }
+}
+
+- (id)init
 {
-  UnityRegisterAppDelegateListener([FBUnityInterface sharedInstance]);
+  if(_instance != nil) {
+    return _instance;
+  }
+
+  if ((self = [super init])) {
+    _instance = self;
+    self.shareDialogMode = ShareDialogMode::AUTOMATIC;
+
+    UnityRegisterAppDelegateListener(self);
+  }
+  return self;
 }
 
 #pragma mark - App (Delegate) Lifecycle
@@ -68,7 +76,7 @@
 
 - (void)didBecomeActive:(NSNotification *)notification
 {
-
+  [FBSDKAppEvents activateApp];
 }
 
 - (void)onOpenURL:(NSNotification *)notification
@@ -92,11 +100,11 @@
   self.useFrictionlessRequests = frictionlessRequests;
 
   if(appId) {
-    [FBSDKSettings.sharedSettings setAppID:[FBUnityUtility stringFromCString:appId]];
+    [FBSDKSettings setAppID:[FBUnityUtility stringFromCString:appId]];
   }
 
   if(urlSuffix && strlen(urlSuffix) > 0) {
-    [FBSDKSettings.sharedSettings setAppURLSchemeSuffix:[FBUnityUtility stringFromCString:urlSuffix]];
+    [FBSDKSettings setAppURLSchemeSuffix:[FBUnityUtility stringFromCString:urlSuffix]];
   }
 
   NSDictionary *userData = [self getAccessTokenUserData] ?: @{};
@@ -143,52 +151,15 @@ isPublishPermLogin:(BOOL)isPublishPermLogin
   };
 
   FBSDKLoginManager *login = [[FBSDKLoginManager alloc] init];
-  [login logInWithPermissions:permissions
-           fromViewController:nil
-                      handler:loginHandler];
-}
-
-- (void)loginWithTrackingPreference:(int)requestId
-                              scope:(const char *)scope
-                           tracking:(const char *)tracking
-                              nonce:(const char *)nonce
-{
-  NSString *scopeStr = [FBUnityUtility stringFromCString:scope];
-  NSArray *permissions = nil;
-  if(scope && strlen(scope) > 0) {
-    permissions = [scopeStr componentsSeparatedByString:@","];
-  }
-
-  NSString *trackingStr = [FBUnityUtility stringFromCString:tracking];
-  NSString *nonceStr = nil;
-  if (nonce) {
-    nonceStr = [FBUnityUtility stringFromCString:nonce];
-  }
-  FBSDKLoginConfiguration *config;
-  if (nonce) {
-    config = [[FBSDKLoginConfiguration alloc] initWithPermissions:permissions tracking:([trackingStr isEqualToString:@"enabled"] ? FBSDKLoginTrackingEnabled : FBSDKLoginTrackingLimited) nonce:nonceStr];
+  if (isPublishPermLogin) {
+    [login logInWithPublishPermissions:permissions
+                    fromViewController:nil
+                               handler:loginHandler];
   } else {
-    config = [[FBSDKLoginConfiguration alloc] initWithPermissions:permissions tracking:([trackingStr isEqualToString:@"enabled"] ? FBSDKLoginTrackingEnabled : FBSDKLoginTrackingLimited)];
+    [login logInWithReadPermissions:permissions
+                 fromViewController:nil
+                            handler:loginHandler];
   }
-
-  void (^loginHandler)(FBSDKLoginManagerLoginResult *,NSError *) = ^(FBSDKLoginManagerLoginResult *result, NSError *error) {
-    if (error) {
-      [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnLoginComplete error:error requestId:requestId];
-      return;
-    } else if (result.isCancelled) {
-      [FBUnityUtility sendCancelToUnity:FBUnityMessageName_OnLoginComplete requestId:requestId];
-      return;
-    }
-
-    if ([self tryCompleteLoginWithRequestId:requestId]) {
-      return;
-    } else {
-      [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnLoginComplete errorMessage:@"Unknown login error" requestId:requestId];
-    }
-  };
-
-  FBSDKLoginManager *login = [[FBSDKLoginManager alloc] init];
-  [login logInFromViewController:nil configuration:config completion:loginHandler];
 }
 
 - (void)logOut
@@ -225,8 +196,10 @@ isPublishPermLogin:(BOOL)isPublishPermLogin
 
   FBUnitySDKDelegate *delegate = [FBUnitySDKDelegate instanceWithRequestID:requestId];
   NSError *error;
-  FBSDKGameRequestDialog *dialog = [[FBSDKGameRequestDialog alloc] initWithContent:content delegate:delegate];
-  dialog.isFrictionlessRequestsEnabled = self.useFrictionlessRequests;
+  FBSDKGameRequestDialog *dialog = [[FBSDKGameRequestDialog alloc] init];
+  dialog.content = content;
+  dialog.delegate = delegate;
+  dialog.frictionlessRequestsEnabled = self.useFrictionlessRequests;
 
   if (![dialog validateWithError:&error]) {
     [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnAppRequestsComplete error:error requestId:requestId];
@@ -235,6 +208,20 @@ isPublishPermLogin:(BOOL)isPublishPermLogin
     [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnAppRequestsComplete errorMessage:@"Failed to show request dialog" requestId:requestId];
   }
 }
+
+- (void)appInviteWithRequestId:(int)requestId
+                    appLinkUrl:(const char *)appLinkUrl
+               previewImageUrl:(const char *)previewImageUrl
+{
+  FBSDKAppInviteContent *content = [[FBSDKAppInviteContent alloc] init];
+  content.appLinkURL = [NSURL URLWithString:[FBUnityUtility stringFromCString:appLinkUrl]];
+  content.appInvitePreviewImageURL = [NSURL URLWithString:[FBUnityUtility stringFromCString:previewImageUrl]];
+  FBUnitySDKDelegate *delegate = [FBUnitySDKDelegate instanceWithRequestID:requestId];
+  [FBSDKAppInviteDialog showFromViewController:nil
+                                   withContent:content
+                                      delegate:delegate];
+}
+
 
 - (void)shareLinkWithRequestId:(int)requestId
                     contentURL:(const char *)contentURL
@@ -247,6 +234,21 @@ isPublishPermLogin:(BOOL)isPublishPermLogin
   NSString *contentUrlStr = [FBUnityUtility stringFromCString:contentURL];
   if (contentUrlStr) {
     linkContent.contentURL = [NSURL URLWithString:contentUrlStr];
+  }
+
+  NSString *contentTitleStr = [FBUnityUtility stringFromCString:contentTitle];
+  if (contentTitleStr) {
+    linkContent.contentTitle = contentTitleStr;
+  }
+
+  NSString *contentDescStr = [FBUnityUtility stringFromCString:contentDescription];
+  if (contentDescStr) {
+    linkContent.contentDescription = contentDescStr;
+  }
+
+  NSString *imageURL = [FBUnityUtility stringFromCString:photoURL];
+  if (imageURL) {
+    linkContent.imageURL = [NSURL URLWithString:imageURL];
   }
 
   [self shareContentWithRequestId:requestId
@@ -269,6 +271,21 @@ isPublishPermLogin:(BOOL)isPublishPermLogin
     linkContent.contentURL = [NSURL URLWithString:contentUrlStr];
   }
 
+  NSString *contentTitleStr = [FBUnityUtility stringFromCString:linkName];
+  if (contentTitleStr) {
+    linkContent.contentTitle = contentTitleStr;
+  }
+
+  NSString *contentDescStr = [FBUnityUtility stringFromCString:linkDescription];
+  if (contentDescStr) {
+    linkContent.contentDescription = contentDescStr;
+  }
+
+  NSString *imageURL = [FBUnityUtility stringFromCString:picture];
+  if (imageURL) {
+    linkContent.imageURL = [NSURL URLWithString:imageURL];
+  }
+
   NSMutableDictionary *feedParameters = [[NSMutableDictionary alloc] init];
   NSString *toStr = [FBUnityUtility stringFromCString:toID];
   if (toStr) {
@@ -285,7 +302,7 @@ isPublishPermLogin:(BOOL)isPublishPermLogin
     [feedParameters setObject:sourceStr forKey:@"source"];
   }
 
-  [linkContent addParameters:feedParameters bridgeOptions:FBSDKShareBridgeOptionsDefault];
+  linkContent.feedParameters = feedParameters;
   [self shareContentWithRequestId:requestId
                      shareContent:linkContent
                        dialogMode:FBSDKShareDialogModeFeedWeb];
@@ -295,11 +312,11 @@ isPublishPermLogin:(BOOL)isPublishPermLogin
                      shareContent:(FBSDKShareLinkContent *)linkContent
                        dialogMode:(FBSDKShareDialogMode)dialogMode
 {
-  FBUnitySDKDelegate *delegate = [FBUnitySDKDelegate instanceWithRequestID:requestId];
-  FBSDKShareDialog *dialog = [[FBSDKShareDialog alloc] initWithViewController:nil
-                                                                      content:linkContent
-                                                                     delegate:delegate];
+  FBSDKShareDialog *dialog = [[FBSDKShareDialog alloc] init];
+  dialog.shareContent = linkContent;
   dialog.mode = dialogMode;
+  FBUnitySDKDelegate *delegate = [FBUnitySDKDelegate instanceWithRequestID:requestId];
+  dialog.delegate = delegate;
 
   NSError *error;
   if (![dialog validateWithError:&error]) {
@@ -327,20 +344,54 @@ isPublishPermLogin:(BOOL)isPublishPermLogin
   }
 }
 
+- (void)showJoinAppGroupDialogWithRequestId:(int) requestId
+                                    groupId:(const char *) groupId
+{
+  FBUnitySDKDelegate *delegate = [FBUnitySDKDelegate instanceWithRequestID:requestId];
+  [FBSDKAppGroupJoinDialog showWithGroupID:[FBUnityUtility stringFromCString:groupId] delegate:delegate];
+}
+
+- (void)showCreateAppGroupDialogWithRequestId:(int) requestId
+                                    groupName:(const char *) groupName
+                             groupDescription:(const char *) groupDescription
+                                 groupPrivacy:(const char *) groupPrivacy
+{
+  FBSDKAppGroupContent *content = [[FBSDKAppGroupContent alloc] init];
+  content.name = [FBUnityUtility stringFromCString:groupName];
+  content.groupDescription = [FBUnityUtility stringFromCString:groupDescription];
+
+  FBSDKAppGroupPrivacy privacy;
+  NSString *privacyStr = [FBUnityUtility stringFromCString:groupPrivacy];
+  if ([privacyStr caseInsensitiveCompare:@"closed"] == NSOrderedSame) {
+    privacy = FBSDKAppGroupPrivacyClosed;
+  } else if ([privacyStr caseInsensitiveCompare:@"open"] == NSOrderedSame) {
+    privacy = FBSDKAppGroupPrivacyOpen;
+  } else {
+    NSLog(@"Unexpced privacy type: %@", privacyStr);
+    privacy = FBSDKAppGroupPrivacyClosed;
+  }
+
+  content.privacy = privacy;
+
+  FBSDKAppGroupAddDialog *dialog = [[FBSDKAppGroupAddDialog alloc] init];
+  dialog.content = content;
+  dialog.delegate = [FBUnitySDKDelegate instanceWithRequestID:requestId];
+
+  NSError *error;
+  if (![dialog validateWithError:&error]) {
+    [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnGroupCreateComplete error:error requestId:requestId];
+  }
+  if (![dialog show]) {
+    [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnGroupCreateComplete errorMessage:@"Failed to show group create dialog" requestId:requestId];
+  }
+}
+
 - (BOOL)tryCompleteLoginWithRequestId:(int) requestId
 {
-  NSMutableDictionary *userData = [[NSMutableDictionary alloc] init];
-  NSDictionary *accessTokenUserData = [self getAccessTokenUserData];
-  NSDictionary *authenticationTokenUserData = [self getAuthenticationTokenUserData];
-  if (accessTokenUserData) {
-    [userData addEntriesFromDictionary:accessTokenUserData];
-  }
-  if (authenticationTokenUserData) {
-    [userData addEntriesFromDictionary:authenticationTokenUserData];
-  }
+  NSDictionary *userData = [self getAccessTokenUserData];
   if (userData) {
     [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnLoginComplete
-                              userData:[userData copy]
+                              userData:userData
                              requestId:requestId];
     return YES;
   } else {
@@ -367,180 +418,46 @@ isPublishPermLogin:(BOOL)isPublishPermLogin
   return nil;
 }
 
-- (NSDictionary *)getAuthenticationTokenUserData
-{
-  FBSDKAuthenticationToken *token = [FBSDKAuthenticationToken currentAuthenticationToken];
-  if (token.tokenString && token.nonce) {
-    return @{
-      @"auth_token_string": token.tokenString,
-      @"auth_nonce": token.nonce
-    };
-  }
-
-  return nil;
-}
-
 @end
 
 #pragma mark - Actual Unity C# interface (extern C)
 
 extern "C" {
 
-  void IOSFBSendViewHierarchy(const char *_tree )
-  {
-    Class FBUnityUtility = NSClassFromString(@"FBSDKCodelessIndexer");
-    [FBUnityUtility performSelector:NSSelectorFromString(@"uploadIndexing:")
-                           withObject:[NSString stringWithUTF8String:_tree]];
-  }
-
-  void IOSFBInit(const char *_appId, bool _frictionlessRequests, const char *_urlSuffix, const char *_userAgentSuffix)
+  void IOSInit(const char *_appId, bool _frictionlessRequests, const char *_urlSuffix, const char *_userAgentSuffix)
   {
     // Set the user agent before calling init to ensure that calls made during
     // init use the user agent suffix.
-    [FBSDKSettings.sharedSettings setUserAgentSuffix:[FBUnityUtility stringFromCString:_userAgentSuffix]];
+    [FBSDKSettings setUserAgentSuffix:[FBUnityUtility stringFromCString:_userAgentSuffix]];
 
     [[FBUnityInterface sharedInstance] configureAppId:_appId
                                  frictionlessRequests:_frictionlessRequests
                                             urlSuffix:_urlSuffix];
-    [[FBSDKAppEvents shared] setIsUnityInitialized:true];
-    [[FBSDKAppEvents shared] sendEventBindingsToUnity];
   }
 
-  void IOSFBEnableProfileUpdatesOnAccessTokenChange(bool enable)
-  {
-    [FBSDKProfile enableUpdatesOnAccessTokenChange:enable];
-  }
-
-  void IOSFBLoginWithTrackingPreference(int requestId, const char *scope, const char *tracking, const char *nonce)
-  {
-    [[FBUnityInterface sharedInstance] loginWithTrackingPreference:requestId scope:scope
-                                                          tracking:tracking
-                                                            nonce:nonce];
-  }
-
-  void IOSFBLogInWithReadPermissions(int requestId,
+  void IOSLogInWithReadPermissions(int requestId,
                                    const char *scope)
   {
     [[FBUnityInterface sharedInstance] logInWithReadPermissions:requestId scope:scope];
   }
 
-  void IOSFBLogInWithPublishPermissions(int requestId,
+  void IOSLogInWithPublishPermissions(int requestId,
                                       const char *scope)
   {
     [[FBUnityInterface sharedInstance] logInWithPublishPermissions:requestId scope:scope];
   }
 
-  void IOSFBLogOut()
+  void IOSLogOut()
   {
     [[FBUnityInterface sharedInstance] logOut];
   }
 
-  char* IOSFBCurrentAuthenticationToken()
-  {
-    FBSDKAuthenticationToken *token = [FBSDKAuthenticationToken currentAuthenticationToken];
-    NSString *str = @"";
-    if (token.tokenString && token.nonce) {
-      try {
-        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:@{
-          @"auth_token_string": token.tokenString,
-          @"auth_nonce": token.nonce
-        } options:NSJSONWritingPrettyPrinted error:nil];
-        if (jsonData) {
-          str = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
-        }
-      } catch (NSException *exception) {
-        NSLog(@"Fail to parse AuthenticationToken");
-      }
-    }
-    const char* string = [str UTF8String];
-    char* res = (char*)malloc(strlen(string) + 1);
-    strcpy(res, string);
-    return res;
-  }
-
-  char* IOSFBCurrentProfile()
-  {
-    FBSDKProfile *profile = [FBSDKProfile currentProfile];
-    NSString *str = @"";
-    NSMutableDictionary<NSString *, id> *data = [NSMutableDictionary new];
-    if (profile.userID) {
-      data[@"userID"] = profile.userID;
-    }
-    if (profile.firstName) {
-      data[@"firstName"] = profile.firstName;
-    }
-    if (profile.middleName) {
-      data[@"middleName"] = profile.middleName;
-    }
-    if (profile.lastName) {
-      data[@"lastName"] = profile.lastName;
-    }
-    if (profile.name) {
-      data[@"name"] = profile.name;
-    }
-    if (profile.email) {
-      data[@"email"] = profile.email;
-    }
-    if (profile.imageURL) {
-      data[@"imageURL"] = profile.imageURL.absoluteString;
-    }
-    if (profile.linkURL) {
-      data[@"linkURL"] = profile.linkURL.absoluteString;
-    }
-    if (profile.friendIDs) {
-      data[@"friendIDs"] = [profile.friendIDs componentsJoinedByString:@","];
-    }
-    if (profile.birthday) {
-      data[@"birthday"] = [NSString stringWithFormat:@"%@", @((time_t)[profile.birthday timeIntervalSince1970])];
-    }
-    if (profile.ageRange) {
-      if (profile.ageRange.min) {
-        data[@"ageMin"] = profile.ageRange.min.stringValue;
-      }
-      if (profile.ageRange.max) {
-        data[@"ageMax"] = profile.ageRange.max.stringValue;
-      }
-    }
-
-    if (profile.hometown) {
-      data[@"hometown_id"] = profile.hometown.id;
-      data[@"hometown_name"] = profile.hometown.name;
-    }
-
-    if (profile.location) {
-      data[@"location_id"] = profile.location.id;
-      data[@"location_name"] = profile.location.name;
-    }
-
-    if (profile.gender) {
-      data[@"gender"] = profile.gender;
-    }
-
-    try {
-      NSData *jsonData = [NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:nil];
-      if (jsonData) {
-        str = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
-      }
-    } catch (NSException *exception) {
-      NSLog(@"Fail to parse Profile");
-    }
-    const char* string = [str UTF8String];
-    char* res = (char*)malloc(strlen(string) + 1);
-    strcpy(res, string);
-    return res;
-  }
-
-  void IOSFBSetPushNotificationsDeviceTokenString(const char *token)
-  {
-    [[FBSDKAppEvents shared] setPushNotificationsDeviceTokenString:[FBUnityUtility stringFromCString:token]];
-  }
-
-  void IOSFBSetShareDialogMode(int mode)
+  void IOSSetShareDialogMode(int mode)
   {
     [FBUnityInterface sharedInstance].shareDialogMode = static_cast<ShareDialogMode>(mode);
   }
 
-  void IOSFBAppRequest(int requestId,
+  void IOSAppRequest(int requestId,
                      const char *message,
                      const char *actionType,
                      const char *objectId,
@@ -565,7 +482,16 @@ extern "C" {
                                                          title: title];
   }
 
-  void IOSFBGetAppLink(int requestId)
+  void IOSAppInvite(int requestId,
+                    const char *appLinkUrl,
+                    const char *previewImageUrl)
+  {
+    [[FBUnityInterface sharedInstance] appInviteWithRequestId:requestId
+                                                   appLinkUrl:appLinkUrl
+                                              previewImageUrl:previewImageUrl];
+  }
+
+  void IOSGetAppLink(int requestId)
   {
     NSURL *url = [NSURL URLWithString:[FBUnityInterface sharedInstance].openURLString];
     [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnGetAppLinkComplete
@@ -574,7 +500,7 @@ extern "C" {
     [FBUnityInterface sharedInstance].openURLString = nil;
   }
 
-  void IOSFBShareLink(int requestId,
+  void IOSShareLink(int requestId,
                     const char *contentURL,
                     const char *contentTitle,
                     const char *contentDescription,
@@ -587,7 +513,7 @@ extern "C" {
                                                      photoURL:photoURL];
   }
 
-  void IOSFBFeedShare(int requestId,
+  void IOSFeedShare(int requestId,
                     const char *toId,
                     const char *link,
                     const char *linkName,
@@ -606,9 +532,19 @@ extern "C" {
                                                   mediaSource:mediaSource];
   }
 
-  void IOSFBAppEventsActivateApp()
+  void IOSJoinGameGroup(int requestId, const char *groupId)
   {
-    [FBSDKAppEvents.shared activateApp];
+    [[FBUnityInterface sharedInstance] showJoinAppGroupDialogWithRequestId:requestId groupId:groupId];
+  }
+
+  void IOSCreateGameGroup(int requestId, const char *groupName, const char *groupDescription, const char *groupPrivacy)
+  {
+    [[FBUnityInterface sharedInstance] showCreateAppGroupDialogWithRequestId:requestId groupName:groupName groupDescription:groupDescription groupPrivacy:groupPrivacy];
+  }
+
+  void IOSFBSettingsActivateApp(const char *appId)
+  {
+    [FBSDKAppEvents activateApp];
   }
 
   void IOSFBAppEventsLogEvent(const char *eventName,
@@ -618,7 +554,7 @@ extern "C" {
                               const char **paramVals)
   {
     NSDictionary *params =  [FBUnityUtility dictionaryFromKeys:paramKeys values:paramVals length:numParams];
-    [[FBSDKAppEvents shared] logEvent:[FBUnityUtility stringFromCString:eventName] valueToSum:valueToSum parameters:params];
+    [FBSDKAppEvents logEvent:[FBUnityUtility stringFromCString:eventName] valueToSum:valueToSum parameters:params];
   }
 
   void IOSFBAppEventsLogPurchase(double amount,
@@ -628,297 +564,23 @@ extern "C" {
                                  const char **paramVals)
   {
     NSDictionary *params =  [FBUnityUtility dictionaryFromKeys:paramKeys values:paramVals length:numParams];
-    [[FBSDKAppEvents shared] logPurchase:amount currency:[FBUnityUtility stringFromCString:currency] parameters:params];
+    [FBSDKAppEvents logPurchase:amount currency:[FBUnityUtility stringFromCString:currency] parameters:params];
   }
 
   void IOSFBAppEventsSetLimitEventUsage(BOOL limitEventUsage)
   {
-    [FBSDKSettings.sharedSettings setIsEventDataUsageLimited:limitEventUsage];
-  }
-
-  void IOSFBAutoLogAppEventsEnabled(BOOL autoLogAppEventsEnabledID)
-  {
-    [FBSDKSettings.sharedSettings setAutoLogAppEventsEnabled:autoLogAppEventsEnabledID];
-  }
-
-  void IOSFBAdvertiserIDCollectionEnabled(BOOL advertiserIDCollectionEnabledID)
-  {
-    [FBSDKSettings.sharedSettings setAdvertiserIDCollectionEnabled:advertiserIDCollectionEnabledID];
-  }
-
-  BOOL IOSFBAdvertiserTrackingEnabled(BOOL advertiserTrackingEnabled)
-  {
-    [FBSDKSettings.sharedSettings setAdvertiserTrackingEnabled:advertiserTrackingEnabled];
-    return [FBSDKSettings.sharedSettings isAdvertiserTrackingEnabled];
-  }
-
-  BOOL IOSFBDomainErrorEnabled(BOOL domainErrorEnabled)
-  {
-    [FBSDKSettings.sharedSettings setIsDomainErrorEnabled:domainErrorEnabled];
-    return [FBSDKSettings.sharedSettings isDomainErrorEnabled];
+    [FBSDKSettings setLimitEventAndDataUsage:limitEventUsage];
   }
 
   char* IOSFBSdkVersion()
   {
-    const char* string = [[FBSDKSettings.sharedSettings sdkVersion] UTF8String];
+    const char* string = [[FBSDKSettings sdkVersion] UTF8String];
     char* res = (char*)malloc(strlen(string) + 1);
     strcpy(res, string);
     return res;
   }
 
-  void IOSFBSetUserID(const char *userID)
-  {
-    [[FBSDKAppEvents shared] setUserID:[FBUnityUtility stringFromCString:userID]];
-  }
-
-  void IOSFBOpenGamingServicesFriendFinder(int requestId)
-  {
-    [FBSDKFriendFinderDialog
-       launchFriendFinderDialogWithCompletionHandler:^(BOOL success, NSError * _Nullable error) {
-        if (!success || error) {
-            [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnFriendFinderComplete error:error requestId:requestId];
-        } else {
-           [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnFriendFinderComplete
-                                    userData:NULL
-                                    requestId:requestId];
-        }
-      }];
-  }
-
-  void IOSFBCreateGamingContext(int requestID, const char *playerID) {
-    NSError *error;
-    NSString *playerIDString = [FBUnityUtility stringFromCString:playerID];
-    FBUnitySDKDelegate *delegate = [FBUnitySDKDelegate instanceWithRequestID:requestID];
-    FBSDKCreateContextContent *content = [[FBSDKCreateContextContent alloc] initDialogContentWithPlayerID:playerIDString];
-    FBSDKContextDialogPresenter *presenter = [[FBSDKContextDialogPresenter alloc] init];
-    [presenter makeAndShowCreateContextDialogWithContent:content delegate:delegate error:&error];
-    if (error) {
-      [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnGetTournamentsComplete error:error requestId:requestID];
-    }
-  }
-
-  void IOSFBSwitchGamingContext(
-    int requestID,
-    const char *contextID) {
-    NSError *error;
-    NSString *contextIDString = [FBUnityUtility stringFromCString:contextID];
-    FBUnitySDKDelegate *delegate = [FBUnitySDKDelegate instanceWithRequestID:requestID];
-    FBSDKSwitchContextContent *content = [[FBSDKSwitchContextContent alloc] initDialogContentWithContextID:contextIDString];
-    FBSDKContextDialogPresenter *presenter = [[FBSDKContextDialogPresenter alloc] init];
-    [presenter makeAndShowSwitchContextDialogWithContent:content delegate:delegate error:&error];
-    if (error) {
-      [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnGetTournamentsComplete error:error requestId:requestID];
-    }
-   }
-
-   void IOSFBChooseGamingContext(
-     int requestID,
-     const char *filter,
-     int minSize,
-     int maxSize)
-   {
-     FBUnitySDKDelegate *delegate = [FBUnitySDKDelegate instanceWithRequestID:requestID];
-     FBSDKChooseContextContent *chooseContent = [FBSDKChooseContextContent alloc];
-
-     NSString *filterNSString = [NSString stringWithUTF8String:filter];
-     if ([filterNSString length] == 0) {
-        chooseContent.filter = FBSDKChooseContextFilterNone;
-     } else if ([filterNSString isEqualToString:@"NEW_PLAYERS_ONLY"]) {
-       chooseContent.filter = FBSDKChooseContextFilterNewPlayersOnly;
-     } else if ([filterNSString isEqualToString:@"INCLUDE_EXISTING_CHALLENGES"]) {
-       chooseContent.filter = FBSDKChooseContextFilterExistingChallenges;
-     } else if ([filterNSString isEqualToString:@"NEW_CONTEXT_ONLY"]) {
-       chooseContent.filter = FBSDKChooseContextFilterNewContextOnly;
-     }
-
-     if (minSize > 0) {
-       chooseContent.minParticipants = minSize;
-     }
-     if (maxSize > 0) {
-       chooseContent.maxParticipants = maxSize;
-     }
-
-     FBSDKContextDialogPresenter *presenter = [[FBSDKContextDialogPresenter alloc] init];
-     [presenter makeAndShowChooseContextDialogWithContent:chooseContent delegate:delegate];
-   }
-
-  void IOSFBGetCurrentGamingContext(int requestID)
-  {
-      FBSDKGamingContext *currentContext = [FBSDKGamingContext currentContext];
-      if (currentContext) {
-          [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnGetCurrentGamingContextComplete
-            userData:@{@"contextId":[currentContext identifier]}
-            requestId:requestID];
-      } else {
-          [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnGetCurrentGamingContextComplete
-            userData:NULL
-            requestId:requestID];
-      }
-  }
-
-  void IOSFBSetDataProcessingOptions(
-    const char** options,
-    int numOptions,
-    int country,
-    int state) {
-    NSMutableArray<NSString*>* array = [[NSMutableArray alloc] init];
-    for (int i = 0; i < numOptions; i++) {
-      NSString* option = [FBUnityUtility stringFromCString:options[i]];
-      if (option) {
-        [array addObject:option];
-      }
-    }
-    [FBSDKSettings.sharedSettings setDataProcessingOptions:array country:country state:state];
-  }
-
-  void IOSFBGetTournaments(int requestID)
-  {
-    FBSDKTournamentFetcher *fetcher = [[FBSDKTournamentFetcher alloc] init];
-    [fetcher fetchTournamentsWithCompletionHandler:^(NSArray<FBSDKTournament *> * tournaments, NSError * error) {
-      if (error) {
-        [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnGetTournamentsComplete error:error requestId:requestID];
-      }
-
-      NSMutableDictionary *userData = [NSMutableDictionary new];
-      for (FBSDKTournament *tournament in tournaments) {
-        userData[tournament.identifier] = [tournament toDictionary];
-      }
-
-      [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnGetTournamentsComplete
-                                userData:userData
-                               requestId:requestID];
-    }];
-  }
-
-  void IOSFBUpdateTournament(const char *tournamentID, int score, int requestID)
-  {
-    FBSDKTournamentUpdater *updater = [[FBSDKTournamentUpdater alloc] init];
-    [updater updateWithTournamentID:[NSString stringWithUTF8String:tournamentID]
-                              score:score
-                  completionHandler:^(BOOL success, NSError * _Nullable error) {
-      if (!success || error) {
-        [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnUpdateTournamentComplete error:error requestId:requestID];
-      } else {
-        [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnUpdateTournamentComplete
-                                  userData:NULL
-                                 requestId:requestID];
-      }
-    }];
-  }
-
-  void IOSFBUpdateAndShareTournament(const char *tournamentID, int score, int requestID)
-  {
-    NSError *error;
-    FBUnitySDKDelegate *delegate = [FBUnitySDKDelegate instanceWithRequestID:requestID];
-    FBSDKShareTournamentDialog *dialog = [[FBSDKShareTournamentDialog alloc] initWithDelegate: delegate];
-    [dialog showWithScore:score tournamentID:[NSString stringWithUTF8String:tournamentID] error:&error];
-      if (error) {
-        [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnGetTournamentsComplete error:error requestId:requestID];
-      }
-  }
-
-  void IOSFBCreateAndShareTournament(
-    int initialScore,
-    const char *title,
-    int sortOrder,
-    int scoreFormat,
-    long endTime,
-    const char *payload,
-    int requestID)
-  {
-    NSError *error;
-    FBUnitySDKDelegate *delegate = [FBUnitySDKDelegate instanceWithRequestID:requestID];
-    FBSDKShareTournamentDialog *dialog = [[FBSDKShareTournamentDialog alloc] initWithDelegate: delegate];
-    NSString *payloadString;
-    if (payload) {
-      payloadString = [NSString stringWithUTF8String:payload];
-    }
-    [dialog showWithInitialScore:initialScore
-                         title:[NSString stringWithUTF8String:title]
-                       endTime:[NSDate dateWithTimeIntervalSince1970: endTime]
-                     scoreType:scoreFormat
-                     sortOrder:sortOrder
-                       payload:payloadString
-                           error: &error];
-      if (error) {
-        [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnGetTournamentsComplete error:error requestId:requestID];
-      }
-  }
-
-  void IOSFBUploadImageToMediaLibrary(
-    int requestId,
-    const char *caption,
-    const char *imageUri,
-    bool shouldLaunchMediaDialog)
-  {
-    NSString *captionString = [FBUnityUtility stringFromCString:caption];
-    NSString *imageUriString = [FBUnityUtility stringFromCString:imageUri];
-    UIImage *image = [UIImage imageWithContentsOfFile:imageUriString];
-
-    FBSDKGamingImageUploaderConfiguration *config =
-    [[FBSDKGamingImageUploaderConfiguration alloc]
-      initWithImage:image
-      caption:captionString
-      shouldLaunchMediaDialog:shouldLaunchMediaDialog ? YES: NO];
-
-    [FBSDKGamingImageUploader
-      uploadImageWithConfiguration:config
-      andResultCompletion:^(BOOL success, id result, NSError * _Nullable error) {
-        if (!success || error) {
-          [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnUploadImageToMediaLibraryComplete
-            error:error
-            requestId:requestId];
-        } else {
-          [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnUploadImageToMediaLibraryComplete
-            userData:@{@"id":result[@"id"]}
-            requestId:requestId];
-        }
-    }];
-
-  }
-
-  void IOSFBUploadVideoToMediaLibrary(int requestId,
-                                      const char *caption,
-                                      const char *videoUri)
-  {
-    NSString *captionString = [FBUnityUtility stringFromCString:caption];
-    NSString *videoUriString = [FBUnityUtility stringFromCString:videoUri];
-    NSURL *videoURL = [NSURL fileURLWithPath:videoUriString];
-
-    FBSDKGamingVideoUploaderConfiguration *config =
-    [[FBSDKGamingVideoUploaderConfiguration alloc]
-      initWithVideoURL:videoURL
-      caption:captionString];
-
-    [FBSDKGamingVideoUploader
-      uploadVideoWithConfiguration:config
-      andResultCompletion:^(BOOL success, id result, NSError * _Nullable error) {
-        if (!success || error) {
-          [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnUploadVideoToMediaLibraryComplete
-            error:error
-            requestId:requestId];
-        } else {
-          [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnUploadVideoToMediaLibraryComplete
-            userData:@{@"id":result[@"id"]}
-            requestId:requestId];
-        }
-    }];
-
-  }
-
-  char* IOSFBGetUserID()
-  {
-    NSString *userID = [[FBSDKAppEvents shared] userID];
-    if (!userID) {
-      return NULL;
-    }
-    const char* string = [userID UTF8String];
-    char* res = (char*)malloc(strlen(string) + 1);
-    strcpy(res, string);
-    return res;
-  }
-
-  void IOSFBFetchDeferredAppLink(int requestId)
+  void IOSFetchDeferredAppLink(int requestId)
   {
     [FBSDKAppLinkUtility fetchDeferredAppLink:^(NSURL *url, NSError *error) {
       if (error) {
@@ -932,18 +594,17 @@ extern "C" {
     }];
   }
 
-  void IOSFBRefreshCurrentAccessToken(int requestId)
+  void IOSRefreshCurrentAccessToken(int requestId)
   {
-    FBSDKGraphRequestCompletion completion = ^(id<FBSDKGraphRequestConnecting> connection, id result, NSError *error) {
-          if (error) {
-            [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnRefreshCurrentAccessTokenComplete error:error requestId:requestId];
-            return;
-          }
+    [FBSDKAccessToken refreshCurrentAccessToken:^(FBSDKGraphRequestConnection *connection, id result, NSError *error) {
+      if (error) {
+        [FBUnityUtility sendErrorToUnity:FBUnityMessageName_OnRefreshCurrentAccessTokenComplete error:error requestId:requestId];
+        return;
+      }
 
-          [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnRefreshCurrentAccessTokenComplete
-                                    userData:[FBUnityUtility getUserDataFromAccessToken:[FBSDKAccessToken currentAccessToken]]
-                                   requestId:requestId];
-      };
-    [FBSDKAccessToken refreshCurrentAccessTokenWithCompletion: completion];
+      [FBUnityUtility sendMessageToUnity:FBUnityMessageName_OnRefreshCurrentAccessTokenComplete
+                                userData:[FBUnityUtility getUserDataFromAccessToken:[FBSDKAccessToken currentAccessToken]]
+                               requestId:requestId];
+    }];
   }
 }

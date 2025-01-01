@@ -14,13 +14,10 @@ U should buy the asset from home store if u use it in your project!
 
 using System.Collections;
 using System.Collections.Generic;
-using ExitGames.Client.Photon;
 using Photon;
-using Photon.Pun;
-using Photon.Realtime;
 using UnityEngine;
 
-public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
+public class LudoGameController : PunBehaviour, IMiniGame
 {
 
     public GameObject[] dice;
@@ -36,13 +33,14 @@ public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
 
     [HideInInspector]
     public int steps = 5;
+    public int steps1 = 5;
 
     public bool nextShotPossible;
     private int SixStepsCount = 0;
     public int finishedPawns = 0;
     private int botCounter = 0;
     private List<GameObject> botPawns;
-    public void HighlightPawnsToMove(int player, int steps)
+    public void HighlightPawnsToMove(int player, int steps, int steps1)
     {
 
         botPawns = new List<GameObject>();
@@ -53,18 +51,19 @@ public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
         GameObject[] pawns = GameManager.Instance.currentPlayer.pawns;
 
         this.steps = steps;
+        this.steps1 = steps1;
 
-        if (steps == 6)
+        if (steps == 6 && steps1 == 6)
         {
             nextShotPossible = true;
             SixStepsCount++;
-            if (SixStepsCount == 3)
+            if (SixStepsCount == 2)
             {
                 nextShotPossible = false;
                 if (GameGui != null)
                 {
                     //gUIController.SendFinishTurn();
-                    Invoke("sendFinishTurnWithDelay", 1.0f);
+                    Invoke(nameof(sendFinishTurnWithDelay), 1.0f);
                 }
 
                 return;
@@ -82,7 +81,7 @@ public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
         GameObject lastPawn = null;
         for (int i = 0; i < pawns.Length; i++)
         {
-            bool possible = pawns[i].GetComponent<LudoPawnController>().CheckIfCanMove(steps);
+            bool possible = pawns[i].GetComponent<LudoPawnController>().CheckIfCanMove((steps), steps1);
             if (possible)
             {
                 lastPawn = pawns[i];
@@ -213,7 +212,7 @@ public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
         {
             SixStepsCount = 0;
         }
-        Invoke("RollDiceWithDelay", GameManager.Instance.botDelays[(botCounter + 1) % GameManager.Instance.botDelays.Count]);
+        Invoke(nameof(RollDiceWithDelay), GameManager.Instance.botDelays[(botCounter + 1) % GameManager.Instance.botDelays.Count]);
         botCounter++;
         //throw new System.NotImplementedException();
     }
@@ -231,7 +230,7 @@ public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
 
     public void RollDiceWithDelay()
     {
-        GameManager.Instance.currentPlayer.dice.GetComponent<GameDiceController>().RollDiceBot(GameManager.Instance.botDiceValues[(botCounter + 1) % GameManager.Instance.botDelays.Count]);
+        GameManager.Instance.currentPlayer.dice.GetComponent<GameDiceController>().RollDiceBot(GameManager.Instance.botDiceValues[(botCounter + 1) % GameManager.Instance.botDelays.Count], Random.Range(1, 7));
     }
 
 
@@ -263,7 +262,7 @@ public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
     void Awake()
     {
         GameManager.Instance.miniGame = this;
-        PhotonNetwork.AddCallbackTarget(this);
+        PhotonNetwork.OnEventCall += this.OnEvent;
     }
 
     // Use this for initialization
@@ -290,7 +289,7 @@ public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
 
     void OnDestroy()
     {
-        PhotonNetwork.RemoveCallbackTarget(this);
+        PhotonNetwork.OnEventCall -= this.OnEvent;
     }
 
     private void OnEvent(byte eventcode, object content, int senderid)
@@ -303,9 +302,10 @@ public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
             gUIController.PauseTimers();
             string[] data = ((string)content).Split(';');
             steps = int.Parse(data[0]);
-            int pl = int.Parse(data[1]);
+            steps1 = int.Parse(data[1]);
+            int pl = int.Parse(data[2]);
 
-            GameManager.Instance.playerObjects[pl].dice.GetComponent<GameDiceController>().RollDiceStart(steps);
+            GameManager.Instance.playerObjects[pl].dice.GetComponent<GameDiceController>().RollDiceStart(steps, steps1);
         }
         else if (eventcode == (int)EnumGame.PawnMove)
         {
@@ -313,6 +313,7 @@ public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
             int index = int.Parse(data[0]);
             int pl = int.Parse(data[1]);
             steps = int.Parse(data[2]);
+            steps1 = int.Parse(data[3]);
             GameManager.Instance.playerObjects[pl].pawns[index].GetComponent<LudoPawnController>().MakeMovePC();
         }
         else if (eventcode == (int)EnumGame.PawnRemove)
@@ -325,38 +326,5 @@ public class LudoGameController : MonoBehaviourPun, IMiniGame, IOnEventCallback
             GameManager.Instance.playerObjects[playerIndex].pawns[index].GetComponent<LudoPawnController>().GoToInitPosition(false);
         }
 
-    }
-
-    public void OnEvent(EventData photonEvent)
-    {
-        Debug.Log("Received event Ludo: " + photonEvent.Code);
-
-        if (photonEvent.Code == (int)EnumGame.DiceRoll)
-        {
-            gUIController.PauseTimers();
-            string[] data = ((string)photonEvent.CustomData).Split(';');
-            steps = int.Parse(data[0]);
-            int pl = int.Parse(data[1]);
-
-            GameManager.Instance.playerObjects[pl].dice.GetComponent<GameDiceController>().RollDiceStart(steps);
-        }
-        else if (photonEvent.Code == (int)EnumGame.PawnMove)
-        {
-            string[] data = ((string)photonEvent.CustomData).Split(';');
-            int index = int.Parse(data[0]);
-            int pl = int.Parse(data[1]);
-            steps = int.Parse(data[2]);
-
-            GameManager.Instance.playerObjects[pl].pawns[index].GetComponent<LudoPawnController>().MakeMovePC();
-        }
-        else if (photonEvent.Code == (int)EnumGame.PawnRemove)
-        {
-            string data = (string)photonEvent.CustomData;
-            string[] messages = data.Split(';');
-            int index = int.Parse(messages[1]);
-            int playerIndex = int.Parse(messages[0]);
-
-            GameManager.Instance.playerObjects[playerIndex].pawns[index].GetComponent<LudoPawnController>().GoToInitPosition(false);
-        }
     }
 }

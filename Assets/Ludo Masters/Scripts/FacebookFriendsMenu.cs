@@ -16,11 +16,12 @@ using UnityEngine;
 using System.Collections;
 using Facebook.Unity;
 using System.Collections.Generic;
+using Facebook.MiniJSON;
 using UnityEngine.UI;
 using PlayFab.ClientModels;
 using PlayFab;
+using ExitGames.Client.Photon.Chat;
 using AssemblyCSharp;
-using Photon.Chat;
 
 public class FacebookFriendsMenu : MonoBehaviour
 {

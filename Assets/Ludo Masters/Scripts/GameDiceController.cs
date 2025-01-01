@@ -15,9 +15,6 @@ U should buy the asset from home store if u use it in your project!
 using System.Collections;
 using System.Collections.Generic;
 using AssemblyCSharp;
-using ExitGames.Client.Photon;
-using Photon.Pun;
-using Photon.Realtime;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -27,7 +24,9 @@ public class GameDiceController : MonoBehaviour
     public Sprite[] diceValueSprites;
     public GameObject arrowObject;
     public GameObject diceValueObject;
+    public GameObject diceValueObject1;
     public GameObject diceAnim;
+    public GameObject diceAnim1;
 
     // Use this for initialization
     public bool isMyDice = false;
@@ -39,6 +38,7 @@ public class GameDiceController : MonoBehaviour
     public GameObject notInteractable;
 
     private int steps = 0;
+    private int steps1 = 0;
     void Start()
     {
         button = GetComponent<Button>();
@@ -49,16 +49,19 @@ public class GameDiceController : MonoBehaviour
 
     public void SetDiceValue()
     {
-        Debug.Log("Set dice value called");
+        Debug.Log("Set dice value called" + steps + "  " + steps1);
         diceValueObject.GetComponent<Image>().sprite = diceValueSprites[steps - 1];
+        diceValueObject1.GetComponent<Image>().sprite = diceValueSprites[steps1 - 1];
         diceValueObject.SetActive(true);
+        diceValueObject1.SetActive(true);
         diceAnim.SetActive(false);
+        diceAnim1.SetActive(false);
         controller.gUIController.restartTimer();
         if (isMyDice)
-            controller.HighlightPawnsToMove(player, steps);
+            controller.HighlightPawnsToMove(player, steps, steps1);
         if (GameManager.Instance.currentPlayer.isBot)
         {
-            controller.HighlightPawnsToMove(player, steps);
+            controller.HighlightPawnsToMove(player, steps ,steps1);
         }
 
     }
@@ -128,22 +131,17 @@ public class GameDiceController : MonoBehaviour
             // else steps = 2;
             // aa++;
             steps = Random.Range(1, 7);
+            steps1 = Random.Range(1, 7);
 
-            RollDiceStart(steps);
-            string data = steps + ";" + controller.gUIController.GetCurrentPlayerIndex();
-            RaiseEventOptions options = new RaiseEventOptions
-            {
-                Receivers = ReceiverGroup.All
-            };
+            RollDiceStart(steps , steps1);
+            string data = steps + ";" + steps1 + ";" + controller.gUIController.GetCurrentPlayerIndex();
+            PhotonNetwork.RaiseEvent((int)EnumGame.DiceRoll, data, true, null);
 
-            PhotonNetwork.RaiseEvent((byte)EnumGame.DiceRoll, data, options, SendOptions.SendReliable);
-
-
-            Debug.Log("Value: " + steps);
+            Debug.Log("Value: " + (steps + steps1));
         }
     }
 
-    public void RollDiceBot(int value)
+    public void RollDiceBot(int value, int value1)
     {
 
         controller.nextShotPossible = false;
@@ -156,18 +154,23 @@ public class GameDiceController : MonoBehaviour
         // bb++;
 
         steps = value;
+        steps1 = value1;
 
-        RollDiceStart(steps);
+        RollDiceStart(steps , steps1);
 
 
     }
 
-    public void RollDiceStart(int steps)
+    public void RollDiceStart(int steps, int step1)
     {
         GetComponent<AudioSource>().Play();
         this.steps = steps;
+        this.steps1 = step1;
         diceValueObject.SetActive(false);
+        diceValueObject1.SetActive(false);
         diceAnim.SetActive(true);
+        diceAnim1.SetActive(true);
         diceAnim.GetComponent<Animator>().Play("RollDiceAnimation");
+        diceAnim1.GetComponent<Animator>().Play("RollDiceAnimation");
     }
 }

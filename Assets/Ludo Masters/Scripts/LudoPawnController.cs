@@ -12,9 +12,6 @@ daily assets update for try.
 U should buy the asset from home store if u use it in your project!
 */
 
-using ExitGames.Client.Photon;
-using Photon.Pun;
-using Photon.Realtime;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -170,9 +167,9 @@ public class LudoPawnController : MonoBehaviour
         return 0;
     }
 
-    public bool CheckIfCanMove(int steps)
+    public bool CheckIfCanMove(int steps, int steps1)
     {
-        if (steps == 6 && !isOnBoard)
+        if ((steps == 6 || steps1 == 6) && !isOnBoard)
         {
             Highlight(true);
             return true;
@@ -256,7 +253,7 @@ public class LudoPawnController : MonoBehaviour
         return false;
     }
 
-    public void GoToStartPosition()
+    public void GoToStartPosition(int step = 0, int step1 = 0)
     {
         rect.SetAsLastSibling();
         currentPosition = 0;
@@ -268,6 +265,10 @@ public class LudoPawnController : MonoBehaviour
             pawnInJoint.GetComponent<LudoPawnController>().GoToStartPosition();
             pawnInJoint = null;
         }
+        if (step != 6)
+            MoveBySteps(step);
+        if(step1 != 6)
+            MoveBySteps(step1);
     }
 
     public void GoToInitPosition(bool callEnd)
@@ -309,26 +310,30 @@ public class LudoPawnController : MonoBehaviour
             currentPosition++;
             StartCoroutine(MoveDelayed(i, path[currentPosition - 1].anchoredPosition, path[currentPosition].anchoredPosition, singlePathSpeed, last, true));
         }
+
+        //for (int i = 0; i < steps1; i++)
+        //{
+        //    bool last = false;
+        //    if (i == steps1 - 1) last = true;
+
+        //    currentPosition++;
+        //    StartCoroutine(MoveDelayed(i, path[currentPosition - 1].anchoredPosition, path[currentPosition].anchoredPosition, singlePathSpeed, last, true));
+        //}
     }
 
     public void MakeMove()
     {
         Debug.Log("Make move button");
 
-        string data = index + ";" + ludoController.gUIController.GetCurrentPlayerIndex() + ";" + ludoController.steps;
+        string data = index + ";" + ludoController.gUIController.GetCurrentPlayerIndex() + ";" + ludoController.steps + ";" + ludoController.steps1;
 
-        // Create an instance of RaiseEventOptions
-        RaiseEventOptions options = new RaiseEventOptions
+        PhotonNetwork.RaiseEvent((int)EnumGame.PawnMove, data, true, null);
+
+        if (pawnInJoint != null)
         {
-            Receivers = ReceiverGroup.All, // Send to all players
-            InterestGroup = 0, // Use 0 if no group restrictions are needed
-            CachingOption = EventCaching.DoNotCache // Optional: decide on caching behavior
-        };
-
-        // Raise the event with the options object
-        PhotonNetwork.RaiseEvent((int)EnumGame.PawnMove, data, options, SendOptions.SendReliable);
-
-        if (pawnInJoint != null) ludoController.steps /= 2;
+            ludoController.steps /= 2;
+            ludoController.steps1 /= 2;
+        }
         GameManager.Instance.diceShot = true;
         myTurn = true;
         ludoController.gUIController.PauseTimers();
@@ -338,15 +343,15 @@ public class LudoPawnController : MonoBehaviour
 
         if (!isOnBoard)
         {
-            GoToStartPosition();
+            GoToStartPosition(ludoController.steps, ludoController.steps1);
         }
         else
         {
             if (pawnInJoint != null)
             {
-                pawnInJoint.GetComponent<LudoPawnController>().MoveBySteps(ludoController.steps);
+                pawnInJoint.GetComponent<LudoPawnController>().MoveBySteps(ludoController.steps + ludoController.steps1);
             }
-            MoveBySteps(ludoController.steps);
+            MoveBySteps(ludoController.steps + ludoController.steps1);
         }
 
         isOnBoard = true;
@@ -354,7 +359,11 @@ public class LudoPawnController : MonoBehaviour
 
     public void MakeMovePC()
     {
-        if (pawnInJoint != null) ludoController.steps /= 2;
+        if (pawnInJoint != null) 
+        {
+            ludoController.steps /= 2; 
+            ludoController.steps1 /= 2; 
+        }
 
         myTurn = false;
         ludoController.gUIController.PauseTimers();
@@ -367,9 +376,9 @@ public class LudoPawnController : MonoBehaviour
         {
             if (pawnInJoint != null)
             {
-                pawnInJoint.GetComponent<LudoPawnController>().MoveBySteps(ludoController.steps);
+                pawnInJoint.GetComponent<LudoPawnController>().MoveBySteps(ludoController.steps + ludoController.steps1);
             }
-            MoveBySteps(ludoController.steps);
+            MoveBySteps(ludoController.steps + ludoController.steps1);
         }
 
         isOnBoard = true;

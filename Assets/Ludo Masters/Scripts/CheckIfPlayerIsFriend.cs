@@ -14,7 +14,6 @@ U should buy the asset from home store if u use it in your project!
 
 using System.Collections;
 using System.Collections.Generic;
-using Photon.Pun;
 using PlayFab;
 using PlayFab.ClientModels;
 using UnityEngine;
@@ -24,43 +23,32 @@ public class CheckIfPlayerIsFriend : MonoBehaviour {
     public GameObject AddFriendButton;
     public GameObject mainObject;
     // Use this for initialization
-   
-    void Start()
-    {
+    void Start() {
         GameManager.Instance.smallMenu = mainObject;
         GameManager.Instance.friendButtonMenu = AddFriendButton;
 
-        if (!GameManager.Instance.offlineMode)
-        {
+        if (!GameManager.Instance.offlineMode) {
             GetFriendsListRequest request = new GetFriendsListRequest();
-            PlayFabClientAPI.GetFriendsList(request, (result) =>
-            {
+            request.IncludeFacebookFriends = true;
+            PlayFabClientAPI.GetFriendsList(request, (result) => {
                 var friends = result.Friends;
-                foreach (var friend in friends)
-                {
-                    if (PhotonNetwork.PlayerListOthers.Length > 0 &&
-                        PhotonNetwork.PlayerListOthers[0].NickName.Equals(friend.FriendPlayFabId))
-                    {
+                foreach (var friend in friends) {
+                    if (PhotonNetwork.otherPlayers[0].name.Equals(friend.FriendPlayFabId)) {
                         Debug.Log("Already friends");
                         AddFriendButton.SetActive(false);
-                        mainObject.GetComponent<RectTransform>().sizeDelta = new Vector2(
-                            mainObject.GetComponent<RectTransform>().sizeDelta.x,
-                            260.0f);
+                        mainObject.GetComponent<RectTransform>().sizeDelta = new Vector2(mainObject.GetComponent<RectTransform>().sizeDelta.x, 260.0f);
                         break;
                     }
                 }
             }, OnPlayFabError);
-        }
-        else
-        {
+        } else {
             AddFriendButton.SetActive(false);
-            mainObject.GetComponent<RectTransform>().sizeDelta = new Vector2(
-                mainObject.GetComponent<RectTransform>().sizeDelta.x,
-                260.0f);
+            mainObject.GetComponent<RectTransform>().sizeDelta = new Vector2(mainObject.GetComponent<RectTransform>().sizeDelta.x, 260.0f);
         }
+
     }
-    void OnPlayFabError(PlayFabError error)
-    {
+
+    void OnPlayFabError(PlayFabError error) {
         Debug.Log("Playfab Error: " + error.ErrorMessage);
     }
 

@@ -14,13 +14,13 @@ U should buy the asset from home store if u use it in your project!
 
 using UnityEngine;
 using System.Collections;
+using ExitGames.Client.Photon.Chat;
 using ExitGames.Client.Photon;
 using UnityEngine.UI;
 using Photon;
 using AssemblyCSharp;
-using Photon.Pun;
 
-public class PhotonChatListener : MonoBehaviourPunCallbacks
+public class PhotonChatListener : PunBehaviour
 {
 
     private Animator animator;
@@ -133,7 +133,7 @@ public class PhotonChatListener : MonoBehaviourPunCallbacks
 
         GameManager.Instance.JoinedByID = true;
 
-        if (PhotonNetwork.CurrentRoom != null)
+        if (PhotonNetwork.inRoom)
         {
             leftRoom = true;
             PhotonNetwork.LeaveRoom();

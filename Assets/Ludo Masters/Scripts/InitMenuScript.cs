@@ -16,11 +16,11 @@ using UnityEngine;
 using System.Collections;
 using UnityEngine.UI;
 using System;
+using ExitGames.Client.Photon.Chat;
 using UnityEngine.SceneManagement;
 using PlayFab.ClientModels;
 using PlayFab;
 using System.Collections.Generic;
-using Photon.Pun;
 #if UNITY_ANDROID || UNITY_IOS
 using UnityEngine.Advertisements;
 #endif
@@ -56,6 +56,9 @@ public class InitMenuScript : MonoBehaviour
 
     void Start()
     {
+
+
+
 
         if (PlayerPrefs.GetInt(StaticStrings.SoundsKey, 0) == 0)
         {
@@ -115,7 +118,7 @@ public class InitMenuScript : MonoBehaviour
 
 
         Debug.Log("Load ad menu");
-        //AdsManager.Instance.adsScript.ShowAd(AdLocation.GameStart);
+        AdsManager.Instance.adsScript.ShowAd(AdLocation.GameStart);
 
         if (PlayerPrefs.GetInt("GamesPlayed", 1) % 8 == 0 && PlayerPrefs.GetInt("GameRated", 0) == 0)
         {
@@ -158,7 +161,7 @@ public class InitMenuScript : MonoBehaviour
                 break;
         }
         GameConfigurationScreen.SetActive(true);
-        //AdsManager.Instance.adsScript.ShowAd(AdLocation.GamePropertiesWindow);
+        AdsManager.Instance.adsScript.ShowAd(AdLocation.GamePropertiesWindow);
     }
 
     public void TakeScreenshot()
@@ -174,7 +177,7 @@ public class InitMenuScript : MonoBehaviour
 
     public void showAdStore()
     {
-        //AdsManager.Instance.adsScript.ShowAd(AdLocation.StoreWindow);
+        AdsManager.Instance.adsScript.ShowAd(AdLocation.StoreWindow);
     }
 
     public void backToMenuFromTableSelect()
@@ -190,7 +193,7 @@ public class InitMenuScript : MonoBehaviour
         if (!challengeFriend)
             GameManager.Instance.inviteFriendActivated = false;
 
-        //AdsManager.Instance.adsScript.ShowAd(AdLocation.GameStart);
+        AdsManager.Instance.adsScript.ShowAd(AdLocation.GameStart);
         if (GameManager.Instance.offlineMode)
         {
             TheMillButton.SetActive(false);
@@ -310,7 +313,7 @@ public class InitMenuScript : MonoBehaviour
     public void showFacebookFriends()
     {
 
-        //AdsManager.Instance.adsScript.ShowAd(AdLocation.FacebookFriends);
+        AdsManager.Instance.adsScript.ShowAd(AdLocation.FacebookFriends);
         GameManager.Instance.playfabManager.GetPlayfabFriends();
     }
 

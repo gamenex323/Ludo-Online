@@ -16,9 +16,9 @@ using UnityEngine;
 using System.Collections;
 using PlayFab;
 using PlayFab.ClientModels;
-using Photon.Pun;
 
-public class MultiplayerGame : MonoBehaviourPun {
+
+public class MultiplayerGame : Photon.PunBehaviour {
 
 //	private PhotonView myPhotonView;
 

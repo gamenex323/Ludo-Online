@@ -18,11 +18,8 @@ using AssemblyCSharp;
 using System;
 using System.Collections.Generic;
 using UnityEngine.UI;
-using Photon.Pun;
-using Photon.Realtime;
-using ExitGames.Client.Photon;
 
-public class CueController : MonoBehaviour, IOnEventCallback
+public class CueController : MonoBehaviour
 {
 
 
@@ -79,22 +76,17 @@ public class CueController : MonoBehaviour, IOnEventCallback
 
     void OnApplicationPause(bool pauseStatus)
     {
-        // Create an instance of RaiseEventOptions
-        RaiseEventOptions options = new RaiseEventOptions();
-        options.Receivers = ReceiverGroup.All; // Optional: Customize the options based on your needs
-
-        // Send the event with RaiseEventOptions
         if (pauseStatus)
         {
-            PhotonNetwork.RaiseEvent(151, 1, options, SendOptions.SendReliable); // Using RaiseEventOptions here
-            //PhotonNetwork.SendOutgoingCommands();
-            Debug.Log("Application paused");
+            PhotonNetwork.RaiseEvent(151, 1, true, null);
+            PhotonNetwork.SendOutgoingCommands();
+            Debug.Log("Application pause");
         }
         else
         {
-            PhotonNetwork.RaiseEvent(152, 1, options, SendOptions.SendReliable); // Using RaiseEventOptions here
-            //PhotonNetwork.SendOutgoingCommands();
-            Debug.Log("Application resumed");
+            PhotonNetwork.RaiseEvent(152, 1, true, null);
+            PhotonNetwork.SendOutgoingCommands();
+            Debug.Log("Application resume");
         }
     }
 
@@ -149,12 +141,12 @@ public class CueController : MonoBehaviour, IOnEventCallback
 
     void Awake()
     {
-        PhotonNetwork.AddCallbackTarget(this);
+        PhotonNetwork.OnEventCall += this.OnEvent;
     }
 
     public void removeOnEventCall()
     {
-        PhotonNetwork.RemoveCallbackTarget(this);
+        PhotonNetwork.OnEventCall -= this.OnEvent;
     }
 
 
@@ -171,7 +163,7 @@ public class CueController : MonoBehaviour, IOnEventCallback
 
     void OnDestroy()
     {
-        PhotonNetwork.RemoveCallbackTarget(this);
+        PhotonNetwork.OnEventCall -= this.OnEvent;
     }
 
     // Multiplayer data received
@@ -273,14 +265,8 @@ public class CueController : MonoBehaviour, IOnEventCallback
         GameManager.Instance.audioSources[3].Play();
         youWonMessage.SetActive(true);
         youWonMessage.GetComponent<Animator>().Play("YouWinMessageAnimation");
-        // Define event options
-        RaiseEventOptions options = new RaiseEventOptions
-        {
-            Receivers = ReceiverGroup.All // Send to all players in the room
-        };
-
-        // Send reliable options
-        PhotonNetwork.RaiseEvent(19, null, options, SendOptions.SendReliable);
+        if (!GameManager.Instance.offlineMode)
+            PhotonNetwork.RaiseEvent(19, null, true, null);
     }
 
     public void Draw()
@@ -291,16 +277,7 @@ public class CueController : MonoBehaviour, IOnEventCallback
         youWonMessage.SetActive(true);
         youWonMessage.GetComponent<Animator>().Play("YouWinMessageAnimation");
         if (!GameManager.Instance.offlineMode)
-        {
-            // Define event options
-            RaiseEventOptions options = new RaiseEventOptions
-            {
-                Receivers = ReceiverGroup.All // Send to all players in the room
-            };
-
-            // Send reliable options
-            PhotonNetwork.RaiseEvent(21, null, options, SendOptions.SendReliable);
-        }
+            PhotonNetwork.RaiseEvent(21, null, true, null);
     }
 
     public void ILost()
@@ -312,16 +289,7 @@ public class CueController : MonoBehaviour, IOnEventCallback
         youWonMessage.GetComponent<YouWinMessageChangeSprite>().changeSprite();
         youWonMessage.GetComponent<Animator>().Play("YouWinMessageAnimation");
         if (!GameManager.Instance.offlineMode)
-        {
-            // Define event options
-            RaiseEventOptions options = new RaiseEventOptions
-            {
-                Receivers = ReceiverGroup.All // Send to all players in the room
-            };
-
-            // Send reliable options
-            PhotonNetwork.RaiseEvent(20, null, options, SendOptions.SendReliable);
-        }
+            PhotonNetwork.RaiseEvent(20, null, true, null);
     }
 
     public void setTurnOffline(bool showTurnMessage)
@@ -351,8 +319,4 @@ public class CueController : MonoBehaviour, IOnEventCallback
         GameManager.Instance.stopTimer = true;
     }
 
-    public void OnEvent(EventData photonEvent)
-    {
-        throw new NotImplementedException();
-    }
 }

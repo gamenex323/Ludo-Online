@@ -59,7 +59,7 @@ public class InterstitialAdsControllerScript : MonoBehaviour {
 
     public void HandleOnAdLoaded(object sender, EventArgs args) {
         print("OnAdLoaded event received.");
-        //GameManager.Instance.adsScript.loadedAdmob = true;
+        GameManager.Instance.adsScript.loadedAdmob = true;
         // Handle the ad loaded event.
     }
 

@@ -18,9 +18,6 @@ using PlayFab.ClientModels;
 using PlayFab;
 using UnityEngine.SceneManagement;
 using AssemblyCSharp;
-using Photon.Pun;
-using Photon.Realtime;
-using ExitGames.Client.Photon;
 
 public class PlayFabAddFriend : MonoBehaviour
 {
@@ -45,23 +42,13 @@ public class PlayFabAddFriend : MonoBehaviour
         menuObject.GetComponent<Animator>().Play("hideMenuAnimation");
         if (!GameManager.Instance.offlineMode)
         {
-            // Create an instance of RaiseEventOptions
-            RaiseEventOptions options = new RaiseEventOptions
-            {
-                Receivers = ReceiverGroup.All, // Send to all players
-                InterestGroup = 0, // Use 0 if no group restrictions are needed
-                CachingOption = EventCaching.DoNotCache // Optional: decide on caching behavior
-            };
-
-            // Raise the event with the options object
-            PhotonNetwork.RaiseEvent(192, 1, options, SendOptions.SendReliable);
-
+            PhotonNetwork.RaiseEvent(192, 1, true, null);
 
 
 
             AddFriendRequest request = new AddFriendRequest()
             {
-                FriendPlayFabId = PhotonNetwork.PlayerListOthers[0].NickName
+                FriendPlayFabId = PhotonNetwork.otherPlayers[0].name
             };
 
 
@@ -94,7 +81,7 @@ public class PlayFabAddFriend : MonoBehaviour
         // if (StaticStrings.showAdWhenLeaveGame)
         //     AdsManager.Instance.adsScript.ShowAd();
         SceneManager.LoadScene("MenuScene");
-        ////sajidPhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
+        PhotonNetwork.BackgroundTimeout = StaticStrings.photonDisconnectTimeoutLong; ;
         Debug.Log("Timeout 3");
         //GameManager.Instance.cueController.removeOnEventCall();
         PhotonNetwork.LeaveRoom();

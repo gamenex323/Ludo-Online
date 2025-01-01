@@ -34,7 +34,7 @@ public class DialogGUIController : MonoBehaviour
 
             //if not, set instance to this
             instance = this;
-            //Other.GetComponent<AdMobObjectController>().Init();
+            Other.GetComponent<AdMobObjectController>().Init();
             //If instance already exists and it's not this:
         }
         else if (instance != this)
